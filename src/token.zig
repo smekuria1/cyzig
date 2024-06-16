@@ -6,22 +6,36 @@ pub const Token = struct {
 };
 
 pub const TokenType = enum(u8) {
-    // Define your token types here
     ILLEGAL,
     EOF,
     IDENT,
-    INT, // Operators
+    INT,
+    // Operators
     ASSIGN,
     PLUS,
+    MINUS,
+    BANG,
+    ASTERISK,
+    SLASH,
+    //
+    LT,
+    GT,
+    EQ,
+    NOT_EQ,
+    //
     COMMA,
     SEMICOLON,
     LPAREN,
     RPAREN,
     LBRACE,
-    RBRACE, // Keywords
+    RBRACE,
+    // Keywords
     FUNCTION,
     LET,
     VAR,
+    TRUE,
+    FALSE,
+    IF,
+    ELSE,
+    RETURN,
 };
-
-

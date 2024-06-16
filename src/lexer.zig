@@ -40,6 +40,14 @@ pub const Lexer = struct {
         self.read_position += 1;
     }
 
+    pub fn peekChar(self: *Lexer) u8 {
+        if (self.read_position >= self.input.len) {
+            return 0;
+        } else {
+            return self.input[self.read_position];
+        }
+    }
+
     fn newToken(allocator: Allocator, tType: TokenType, ch: u8) Token {
         var lit = [_]u8{'1'};
         lit[0] = ch;
@@ -56,11 +64,12 @@ pub const Lexer = struct {
     }
 
     pub fn isDigit(ch: u8) bool {
-        return '0' <= ch and ch <= '9';
+        return ch >= '0' and ch <= '9';
     }
     pub fn readIdentifier(self: *Lexer) []const u8 {
         const postion: usize = self.position;
         while (isLetter(self.ch)) {
+            // std.debug.print("readIdentifier {c}\n", .{self.ch});
             self.readChar();
         }
 
@@ -70,6 +79,7 @@ pub const Lexer = struct {
     pub fn readNumber(self: *Lexer) []const u8 {
         const position = self.position;
         while (isDigit(self.ch)) {
+            // std.debug.print("IsDigit {c}\n", .{self.ch});
             self.readChar();
         }
         return self.input[position..self.position];
@@ -80,6 +90,11 @@ pub const Lexer = struct {
         keyWords.put("fn", TokenType.FUNCTION) catch unreachable;
         keyWords.put("let", TokenType.LET) catch unreachable;
         keyWords.put("var", TokenType.VAR) catch unreachable;
+        keyWords.put("true", TokenType.TRUE) catch unreachable;
+        keyWords.put("false", TokenType.FALSE) catch unreachable;
+        keyWords.put("if", TokenType.IF) catch unreachable;
+        keyWords.put("else", TokenType.ELSE) catch unreachable;
+        keyWords.put("return", TokenType.RETURN) catch unreachable;
 
         return keyWords;
     }
@@ -101,13 +116,61 @@ pub const Lexer = struct {
     pub fn nextToken(self: *Lexer) ?Token {
         var tok: Token = undefined;
         self.skipWhiteSpace();
-        std.debug.print("\nPosition {any}\n", .{self.position});
+        // std.debug.print("\nPosition {any}\n", .{self.position});
+        // std.debug.print("Read Position {any}\n", .{self.read_position});
         switch (self.ch) {
             '=' => {
-                tok = newToken(self.allocator, TokenType.ASSIGN, self.ch);
+                if (self.peekChar() == '=') {
+                    const ch = self.ch;
+                    self.readChar();
+                    //////////SCUFFED WAY OF CREATING STRING SLICE THINGY PLEASE FIX THIS SHIT
+                    var lit = [_]u8{ '1', '1' };
+                    lit[0] = ch;
+                    lit[1] = self.ch;
+                    tok = Token{
+                        .literal = &lit,
+                        .tType = TokenType.EQ,
+                    };
+                } else {
+                    tok = newToken(self.allocator, TokenType.ASSIGN, self.ch);
+                }
             },
             '+' => {
                 tok = newToken(self.allocator, TokenType.PLUS, self.ch);
+            },
+            '-' => {
+                tok = newToken(self.allocator, TokenType.MINUS, self.ch);
+            },
+            '!' => {
+                if (self.peekChar() == '=') {
+                    const ch = self.ch;
+                    self.readChar();
+                    //////////SCUFFED WAY OF CREATING STRING SLICE THINGY PLEASE FIX THIS SHIT
+                    var lit = [_]u8{ '1', '1' };
+                    lit[0] = ch;
+                    lit[1] = self.ch;
+                    tok = Token{
+                        .literal = &lit,
+                        .tType = TokenType.NOT_EQ,
+                    };
+                } else {
+                    tok = newToken(self.allocator, TokenType.BANG, self.ch);
+                }
+            },
+            '*' => {
+                tok = newToken(self.allocator, TokenType.ASTERISK, self.ch);
+            },
+            '/' => {
+                tok = newToken(self.allocator, TokenType.SLASH, self.ch);
+            },
+            '<' => {
+                tok = newToken(self.allocator, TokenType.LT, self.ch);
+            },
+            '>' => {
+                tok = newToken(self.allocator, TokenType.GT, self.ch);
+            },
+            ',' => {
+                tok = newToken(self.allocator, TokenType.COMMA, self.ch);
             },
             ';' => {
                 tok = newToken(self.allocator, TokenType.SEMICOLON, self.ch);
@@ -124,6 +187,7 @@ pub const Lexer = struct {
             '}' => {
                 tok = newToken(self.allocator, TokenType.RBRACE, self.ch);
             },
+
             0 => {
                 tok.literal = "";
                 tok.tType = TokenType.EOF;
@@ -137,6 +201,7 @@ pub const Lexer = struct {
                 } else if (isDigit(self.ch)) {
                     tok.tType = TokenType.INT;
                     tok.literal = self.readNumber();
+                    return tok;
                 } else {
                     tok = newToken(self.allocator, TokenType.ILLEGAL, self.ch);
                 }
@@ -151,17 +216,89 @@ pub const Lexer = struct {
 
 test "TestNextToken" {
     const allocator = std.testing.allocator;
-    const input = "var a = 75";
+    const input =
+        \\let five = 5;
+        \\let ten = 10;
+        \\let add = fn(x, y) {
+        \\              x + y;
+        \\               };    
+        \\let result = add(five, ten);
+        \\!-/*5;
+        \\5 < 10 > 5;
+        \\if (5 < 10) {
+        \\    return true;
+        \\} else {
+        \\    return false;
+        \\} 
+        \\10 == 10;
+        \\10 != 9;
+        \\
+    ;
 
     var lexer = Lexer.init(allocator, input);
     defer lexer.deinit();
 
     const expected_tokens = [_]Token{
-        Token{ .tType = .VAR, .literal = @as([]const u8, "var") },
-        Token{ .tType = .IDENT, .literal = "a" },
+        Token{ .tType = .LET, .literal = "let" },
+        Token{ .tType = .IDENT, .literal = "five" },
         Token{ .tType = .ASSIGN, .literal = "=" },
-        Token{ .tType = .INT, .literal = "7" },
+        Token{ .tType = .INT, .literal = "5" },
         Token{ .tType = .SEMICOLON, .literal = ";" },
+        Token{ .tType = .LET, .literal = "let" },
+        Token{ .tType = .IDENT, .literal = "ten" },
+        Token{ .tType = .ASSIGN, .literal = "=" },
+        Token{ .tType = .INT, .literal = "10" },
+        Token{ .tType = .SEMICOLON, .literal = ";" },
+        Token{ .tType = .LET, .literal = "let" },
+        Token{ .tType = .IDENT, .literal = "add" },
+        Token{ .tType = .ASSIGN, .literal = "=" },
+        Token{ .tType = .FUNCTION, .literal = "fn" },
+        Token{ .tType = .LPAREN, .literal = "(" },
+        Token{ .tType = .IDENT, .literal = "x" },
+        Token{ .tType = .COMMA, .literal = "," },
+        Token{ .tType = .IDENT, .literal = "y" },
+        Token{ .tType = .RPAREN, .literal = ")" },
+        Token{ .tType = .LBRACE, .literal = "{" },
+        Token{ .tType = .IDENT, .literal = "x" },
+        Token{ .tType = .PLUS, .literal = "+" },
+        Token{ .tType = .IDENT, .literal = "y" },
+        Token{ .tType = .SEMICOLON, .literal = ";" },
+        Token{ .tType = .RBRACE, .literal = "}" },
+        Token{ .tType = .SEMICOLON, .literal = ";" },
+        Token{ .tType = .LET, .literal = "let" },
+        Token{ .tType = .IDENT, .literal = "result" },
+        Token{ .tType = .ASSIGN, .literal = "=" },
+        Token{ .tType = .IDENT, .literal = "add" },
+        Token{ .tType = .LPAREN, .literal = "(" },
+        Token{ .tType = .IDENT, .literal = "five" },
+        Token{ .tType = .COMMA, .literal = "," },
+        Token{ .tType = .IDENT, .literal = "ten" },
+        Token{ .tType = .RPAREN, .literal = ")" },
+        Token{ .tType = .SEMICOLON, .literal = ";" },
+        Token{ .tType = .BANG, .literal = "!" },
+        Token{ .tType = .MINUS, .literal = "-" },
+        Token{ .tType = .SLASH, .literal = "/" },
+        Token{ .tType = .ASTERISK, .literal = "*" },
+        Token{ .tType = .INT, .literal = "5" },
+        Token{ .tType = .SEMICOLON, .literal = ";" },
+        Token{ .tType = .INT, .literal = "5" },
+        Token{ .tType = .LT, .literal = "<" },
+        Token{ .tType = .INT, .literal = "10" },
+        Token{ .tType = .GT, .literal = ">" },
+        Token{ .tType = .INT, .literal = "5" },
+        Token{ .tType = .SEMICOLON, .literal = ";" },
+        Token{ .tType = .IF, .literal = "if" },
+        Token{ .tType = .LPAREN, .literal = "(" },
+        Token{ .tType = .INT, .literal = "5" },
+        Token{ .tType = .LT, .literal = "<" },
+        Token{ .tType = .INT, .literal = "10" },
+        Token{ .tType = .RPAREN, .literal = ")" },
+        Token{ .tType = .LBRACE, .literal = "{" },
+        Token{ .tType = .RETURN, .literal = "return" },
+        Token{ .tType = .TRUE, .literal = "true" },
+        Token{ .tType = .SEMICOLON, .literal = ";" },
+        Token{ .tType = .RBRACE, .literal = "}" },
+
         // Token{ .tType = .EOF, .literal = "" },
     };
     var i: usize = 0;
@@ -169,7 +306,7 @@ test "TestNextToken" {
         if (i >= expected_tokens.len) {
             break;
         }
-        std.debug.print("\n{any} {s} Read Pos {any}\n", .{ token.tType, token.literal, lexer.read_position });
-        // try std.testing.expectEqual(expected_tokens[i].tType, token.tType);
+        std.debug.print("\n{any} {s} {s} \n", .{ token.tType, token.literal, expected_tokens[i].literal });
+        try std.testing.expectEqual(expected_tokens[i].tType, token.tType);
     }
 }
