@@ -1,64 +1,97 @@
-const Token = @import("./token.zig").Token;
-const TokenType = @import("./token.zig").TokenType;
 const std = @import("std");
 
-const Node = struct {
-    ptr: *anyopaque,
-    impl: *const Interface,
+const Token = @import("token.zig").Token;
 
-    pub const Interface = struct {
-        tokenLiteral: *const fn (ctx: *anyopaque) []const u8,
-    };
+pub const Node = union(enum) {
+    Statement: *Statement,
+    Expression: *Expression,
 
     pub fn tokenLiteral(self: Node) []const u8 {
-        return self.impl.tokenLiteral(self.ptr);
+        return switch (self) {
+            .Statement => |stmt| stmt.tokenLiteral(),
+            .Expression => |expr| expr.tokenLiteral(),
+        };
     }
 };
 
-const Statement = struct {
-    node: Node,
+pub const Statement = union(enum) {
+    LetStatement: *LetStatement,
+
+    pub fn tokenLiteral(self: Statement) []const u8 {
+        return switch (self) {
+            .LetStatement => |letStmt| letStmt.tokenLiteral(),
+        };
+    }
 };
 
-const Expression = struct {
-    node: Node,
+pub const Expression = union(enum) {
+    Identifier: *Identifier,
+
+    pub fn tokenLiteral(self: Expression) []const u8 {
+        return switch (self) {
+            .Identifier => |ident| ident.tokenLiteral(),
+        };
+    }
 };
 
-const Program = struct {
-    statements: []Statement,
+pub const Program = struct {
+    statements: []Node,
 
-    pub fn tokenLiteral(ctx: *anyopaque) []const u8 {
-        const self: *Program = @ptrCast(@alignCast(ctx));
+    pub fn init(self: *Program, allocator: std.mem.Allocator) void {
+        self.statements = allocator.alloc(Node, 0) catch unreachable;
+    }
 
+    pub fn deinit(self: *Program) void {
+        self.statements = self.allocator.realloc(self.statements, 0) catch unreachable;
+    }
+
+    pub fn tokenLiteral(self: *Program) []const u8 {
         if (self.statements.len > 0) {
-            return self.statements[0].node.tokenLiteral();
+            return self.statements[0].tokenLiteral();
         } else {
             return "";
         }
     }
-
-    pub fn create(allocator: std.mem.Allocator) !*Program {
-        const instance = try allocator.create(Program);
-        instance.*.statements = try allocator.alloc(Statement, 1);
-    }
 };
 
-const letStatement = struct {
+pub const LetStatement = struct {
     token: Token,
     name: *Identifier,
     value: Expression,
 
-    pub fn tokenLiteral(self: *@This()) []const u8 {
+    pub fn tokenLiteral(self: *LetStatement) []const u8 {
         return self.token.literal;
     }
 };
 
-const Identifier = struct {
+pub const Identifier = struct {
     token: Token,
     value: []const u8,
 
-    pub fn tokenLiteral(self: *@This()) []const u8 {
+    pub fn tokenLiteral(self: *Identifier) []const u8 {
         return self.token.literal;
     }
 };
 
-test "Test Nodes" {}
+test "AST example" {
+    const allocator = std.testing.allocator;
+
+    var ident = Identifier{
+        .token = Token{ .literal = "myVar", .tType = .IDENT },
+        .value = "myVar",
+    };
+
+    var letStmt = LetStatement{
+        .token = Token{ .literal = "let", .tType = .LET },
+        .name = &ident,
+        .value = Expression{ .Identifier = &ident },
+    };
+
+    var program = try allocator.create(Program);
+
+    program.statements = try allocator.alloc(Node, 1);
+
+    program.statements[0] = Node{ .Statement = &letStmt };
+
+    std.debug.print("{s}\n", .{program.tokenLiteral()});
+}
