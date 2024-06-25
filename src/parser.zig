@@ -5,7 +5,7 @@ const Lexer = @import("./lexer.zig").Lexer;
 const Ast = @import("./ast.zig");
 const Allocator = std.mem.Allocator;
 const Pretty = @import("./pretty.zig");
-const string = []u8;
+const string = []const u8;
 pub const Parser = struct {
     l: *Lexer,
     curToken: Token,
@@ -26,7 +26,7 @@ pub const Parser = struct {
     }
 
     pub fn deinit(self: *Parser) void {
-        self.allocator.free(self.errors.items);
+        self.errors.deinit();
         self.allocator.destroy(self);
     }
 
@@ -41,21 +41,22 @@ pub const Parser = struct {
 
     pub fn checkParserErros(self: *Parser) bool {
         const err = self.errors;
-        if (err.items.len >= 0) {
+        if (err.list.items.len <= 0) {
             return false;
         }
 
-        std.debug.print("\nParser had {d} erros", .{self.errors.items.len});
-        for (self.errors.items) |value| {
+        std.debug.print("\nParser had {d} errors\n", .{err.list.items.len});
+        for (err.list.items) |value| {
             std.debug.print("{any}\n", .{value});
         }
         return true;
     }
 
     pub fn peekError(self: *Parser, t: TokenType) void {
-        const buf = [_]u8{};
+        var buf: [256]u8 = undefined;
         const msg = std.fmt.bufPrint(&buf, "expected next token to be {}, got {} instead", .{ t, self.peekToken.tType }) catch unreachable;
-        self.errors.append(msg) catch unreachable;
+        const sliceMsg: []const u8 = msg[0..];
+        self.errors.list.append(sliceMsg) catch unreachable;
     }
 
     pub fn parseProgram(self: *Parser) *Ast.Program {
@@ -82,6 +83,7 @@ pub const Parser = struct {
         var stmt = self.allocator.create(Ast.LetStatement) catch unreachable;
         stmt.token = self.curToken;
         if (!self.expectPeek(.IDENT)) {
+            self.allocator.destroy(stmt);
             return null;
         }
         var identifier = self.allocator.create(Ast.Identifier) catch unreachable;
@@ -89,6 +91,8 @@ pub const Parser = struct {
         identifier.value = self.curToken.literal;
         stmt.name = identifier;
         if (!self.expectPeek(.ASSIGN)) {
+            self.allocator.destroy(identifier);
+            self.allocator.destroy(stmt);
             return null;
         }
 
@@ -111,13 +115,13 @@ pub const Parser = struct {
             self.nextToken();
             return true;
         } else {
-            //  self.peekError(tType);
+            self.peekError(tType);
             return false;
         }
     }
 };
 
-test "TestParser" {
+test "TestLetStatements Good" {
     const allocator = std.testing.allocator;
     const input =
         \\let x = 5;
@@ -130,8 +134,27 @@ test "TestParser" {
     defer p.deinit();
     const program = p.parseProgram();
     defer program.deinit();
-    // try std.testing.expect(p.checkParserErros());
-    try Pretty.print(allocator, p, .{});
-    std.debug.print("\n{any}\n", .{program.statements.items.len});
-    try Pretty.print(allocator, program, .{});
+
+    try std.testing.expectEqual(3, program.statements.list.items.len);
+    // try Pretty.print(allocator, program, .{});
+
+}
+
+test "TestLetStatements Bad" {
+    const allocator = std.testing.allocator;
+    const input =
+        \\let x = 5;
+        \\let y x;
+        \\let x 21321;
+    ;
+    var l = Lexer.init(allocator, input);
+    defer l.deinit();
+    var p = Parser.init(allocator, l);
+    defer p.deinit();
+    const program = p.parseProgram();
+    defer program.deinit();
+    try std.testing.expect(p.checkParserErros());
+    try std.testing.expectEqual(1, program.statements.list.items.len);
+    // try Pretty.print(allocator, program, .{});
+
 }

@@ -68,58 +68,35 @@ pub const Program = struct {
 
     pub fn deinit(self: *Program) void {
         var count: usize = 0;
-        for (self.statements.items) |value| {
-            if (count > self.statements.pos) {
-                break;
-            }
+        for (self.statements.list.items) |value| {
             self.allocator.destroy(value.name);
             self.allocator.destroy(value);
             count += 1;
         }
         // self.statements.deinit();
-        self.allocator.free(self.statements.items);
+        self.statements.list.deinit();
         self.allocator.destroy(self);
     }
 };
 
 pub fn GenericAst(comptime T: type) type {
     return struct {
-        pos: usize,
-        items: []T,
+        list: std.ArrayList(T),
         allocator: std.mem.Allocator,
 
         pub fn init(allocator: std.mem.Allocator) !GenericAst(T) {
             return .{
-                .pos = 0,
                 .allocator = allocator,
-                .items = try allocator.alloc(T, 1),
+                .list = std.ArrayList(T).init(allocator),
             };
         }
 
         pub fn deinit(self: *GenericAst(T)) void {
-            self.allocator.free(self.items);
+            self.list.deinit();
         }
 
         pub fn append(self: *GenericAst(T), value: T) !void {
-            const pos = self.pos;
-            const len = self.items.len;
-            print("\nin apppend value {any}\n", .{value});
-            if (pos == 0 and len == 1) {
-                self.items[pos] = value;
-                self.pos = pos + 1;
-                return;
-            }
-            if (pos == len) {
-                var larger = try self.allocator.alloc(T, len * 2);
-
-                @memcpy(larger[0..len], self.items);
-
-                self.allocator.free(self.items);
-                self.items = larger;
-            }
-
-            self.items[pos] = value;
-            self.pos = pos + 1;
+            try self.list.append(value);
         }
     };
 }
