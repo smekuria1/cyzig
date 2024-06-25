@@ -26,6 +26,9 @@ pub const Parser = struct {
     }
 
     pub fn deinit(self: *Parser) void {
+        for (self.errors.list.items) |value| {
+            self.allocator.free(value);
+        }
         self.errors.deinit();
         self.allocator.destroy(self);
     }
@@ -47,16 +50,15 @@ pub const Parser = struct {
 
         std.debug.print("\nParser had {d} errors\n", .{err.list.items.len});
         for (err.list.items) |value| {
-            std.debug.print("{any}\n", .{value});
+            std.debug.print("{s}\n", .{value});
         }
         return true;
     }
 
     pub fn peekError(self: *Parser, t: TokenType) void {
-        var buf: [256]u8 = undefined;
-        const msg = std.fmt.bufPrint(&buf, "expected next token to be {}, got {} instead", .{ t, self.peekToken.tType }) catch unreachable;
-        const sliceMsg: []const u8 = msg[0..];
-        self.errors.list.append(sliceMsg) catch unreachable;
+        // var buf: [20]u8 = undefined;
+        const msg = std.fmt.allocPrint(self.allocator, "expected next token to be {}, got {} instead", .{ t, self.peekToken.tType }) catch unreachable;
+        self.errors.list.append(msg) catch unreachable;
     }
 
     pub fn parseProgram(self: *Parser) *Ast.Program {
@@ -145,7 +147,7 @@ test "TestLetStatements Bad" {
     const input =
         \\let x = 5;
         \\let y x;
-        \\let x 21321;
+        \\let x  21321;
     ;
     var l = Lexer.init(allocator, input);
     defer l.deinit();
