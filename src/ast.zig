@@ -4,78 +4,84 @@ const TokenType = @import("./token.zig").TokenType;
 const print = std.debug.print;
 
 pub const Node = union(enum) {
-    Statement: Statement,
-    Expression: Expression,
-
-    pub fn tokenLiteral(self: *Node) []const u8 {
-        switch (self.*) {
-            inline else => |*case| case.tokenLiteral(),
-        }
-    }
+    const self = @This();
+    statement: Statement,
+    expression: Expression,
 };
 
 pub const Statement = union(enum) {
-    LetStatement: LetStatement,
+    letStatement: LetStatement,
+    returnStatement: ReturnStatement,
+    expression: ExpressionStatement,
 
-    pub fn tokenLiteral(self: *Statement) []const u8 {
-        switch (self.*) {
-            inline else => |*case| case.tokenLiteral(),
+    pub const LetStatement = struct {
+        const Self = @This();
+        token: Token,
+        ident: Token,
+        value: ?Expression,
+
+        pub fn printValue(self: *Self) void {
+            print("Token: {}\n", .{self.token});
         }
-    }
+    };
+
+    pub const ReturnStatement = struct {
+        const Self = @This();
+        token: Token,
+        value: ?Expression,
+    };
+
+    pub const ExpressionStatement = struct {
+        token: Token,
+        value: ?Expression,
+    };
 };
 
-pub const Expression = struct {};
-
-pub const LetStatement = struct {
-    token: Token,
-    name: *Identifier,
-    value: Expression,
-
-    pub fn tokenLiteral(self: *LetStatement) []const u8 {
-        return self.token.literal;
-    }
+pub const Expression = union(enum) {
+    identifier: Identifier,
 };
 
 pub const Identifier = struct {
     token: Token,
     value: []const u8,
 
+    pub fn init(token: Token) Identifier {
+        return .{
+            .token = token,
+            .value = token.literal,
+        };
+    }
+
     pub fn tokenLiteral(self: *Identifier) []const u8 {
         return self.token.literal;
+    }
+
+    pub fn printValue(self: *Identifier) !void {
+        print("{s}", .{self.value});
     }
 };
 
 pub const Program = struct {
-    statements: GenericAst(*LetStatement),
     allocator: std.mem.Allocator,
+    statements: std.ArrayList(Statement),
 
-    pub fn tokenLiteral(self: *Program) []const u8 {
-        if (self.Statements.len > 0) {
-            return self.Statements[0].tokenLiteral();
-        } else {
-            return "";
-        }
-    }
-
-    pub fn init(allocator: std.mem.Allocator) *Program {
-        var program = allocator.create(Program) catch unreachable;
-        const astslice = GenericAst(*LetStatement).init(allocator) catch unreachable;
-        program.statements = astslice;
-        program.allocator = allocator;
-
-        return program;
+    pub fn init(allocator: std.mem.Allocator) Program {
+        return .{
+            .allocator = allocator,
+            .statements = std.ArrayList(Statement).init(allocator),
+        };
     }
 
     pub fn deinit(self: *Program) void {
-        var count: usize = 0;
-        for (self.statements.list.items) |value| {
-            self.allocator.destroy(value.name);
-            self.allocator.destroy(value);
-            count += 1;
+        self.statements.deinit();
+    }
+
+    pub fn tokenLiteral(self: *Program) []const u8 {
+        if (self.statements.items.len > 0) {
+            return self.statements[0].tokenLiteral;
+        } else {
+            return "";
         }
-        // self.statements.deinit();
-        self.statements.list.deinit();
-        self.allocator.destroy(self);
     }
 };
 
