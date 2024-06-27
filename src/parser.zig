@@ -27,7 +27,6 @@ pub const Parser = struct {
 
     pub fn deinit(self: *Parser) void {
         for (self.errors.items) |value| {
-
             self.allocator.free(value);
         }
         self.errors.deinit();
@@ -49,10 +48,8 @@ pub const Parser = struct {
             return false;
         }
 
-
         std.debug.print("\nParser had {d} errors\n", .{err.items.len});
         for (err.items) |value| {
-
             std.debug.print("{s}\n", .{value});
         }
         return true;
@@ -61,7 +58,6 @@ pub const Parser = struct {
     pub fn peekError(self: *Parser, t: TokenType) void {
         const msg = std.fmt.allocPrint(self.allocator, "expected next token to be {}, got {} instead", .{ t, self.peekToken.tType }) catch unreachable;
         self.errors.append(msg) catch unreachable;
-
     }
 
     pub fn parseProgram(self: *Parser) Ast.Program {
@@ -88,7 +84,7 @@ pub const Parser = struct {
     pub fn parseReturnStatement(self: *Parser) ?Ast.Statement {
         const stmt = Ast.Statement.ReturnStatement{
             .token = self.curToken,
-            .value = undefined,
+            .returnValue = undefined,
         };
 
         self.nextToken();
@@ -104,17 +100,14 @@ pub const Parser = struct {
     pub fn parseLetStatement(self: *Parser) ?Ast.Statement {
         var stmt = Ast.Statement.LetStatement{
             .token = self.curToken,
-            .ident = Token{
-                .literal = "LET",
-                .tType = .LET,
-            },
+            .name = undefined,
             .value = null,
         };
 
         if (!self.expectPeek(.IDENT)) {
             return null;
         }
-        stmt.ident = self.curToken;
+        stmt.name = Ast.Identifier.init(self.curToken);
         if (!self.expectPeek(.ASSIGN)) {
             return null;
         }
@@ -168,7 +161,7 @@ test "TestLetStatements Good" {
     for (expected_idents, 0..) |ident, i| {
         const statement = program.statements.items[i];
         const ls = statement.letStatement;
-        const literal = ls.ident.literal;
+        const literal = ls.name.tokenLiteral();
 
         // std.debug.print("\n ====== \n statements: {any}\n ", .{statement});
         try std.testing.expect(ls.token.tType == .LET);
@@ -187,7 +180,6 @@ test "Test ReturnStatement" {
         \\return 5;
         \\return x;
         \\return y + x;
-
     ;
     var l = Lexer.init(allocator, input);
     defer l.deinit();
@@ -217,7 +209,36 @@ pub fn checkTokenTypeMatch(stmt: Ast.Statement, kind: TokenType) bool {
         },
     }
 }
+test "TestString" {
+    const allocator = std.testing.allocator;
+    const input =
+        \\ let myvar = anothervar;
+    ;
+    var l = Lexer.init(allocator, input);
+    defer l.deinit();
+    var parser = Parser.init(allocator, l);
+    var program = parser.parseProgram();
+    // var smt = program.statements.items[0];
 
+    std.debug.print("\n{any}\n", .{program.statements.items});
+
+    var prog = program.statements.items[0];
+    prog.letStatement.value = Ast.Expression{ .identifier = Ast.Identifier.init(Token{
+        .literal = "anothervar",
+        .tType = .IDENT,
+    }) };
+    try Pretty.print(allocator, prog, .{});
+    // const stringer = switch (smt) {
+    //     .expression => smt.expression.string(),
+    //     .letStatement => smt.letStatement.string(),
+    //     .returnStatement => smt.returnStatement.string(),
+    // };
+    const stringer = try program.string();
+    std.debug.print("\n{any}\n", .{stringer});
+
+    defer program.deinit();
+    defer parser.deinit();
+}
 // test "TestLetStatements Bad" {
 //     const allocator = std.testing.allocator;
 //     const input =

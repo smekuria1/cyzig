@@ -17,23 +17,55 @@ pub const Statement = union(enum) {
     pub const LetStatement = struct {
         const Self = @This();
         token: Token,
-        ident: Token,
+        name: Identifier,
         value: ?Expression,
 
         pub fn printValue(self: *Self) void {
-            print("Token: {}\n", .{self.token});
+            print("{} {} \n", .{ self.token.literal, self.value.?.identifier.value });
+        }
+
+        pub fn string(self: *Self) []const u8 {
+            var buf: [1024]u8 = undefined;
+            _ = std.fmt.bufPrint(&buf, "{s} {s} =", .{ self.token.literal, self.name.tokenLiteral() }) catch unreachable;
+            if (self.value != null) {
+                _ = std.fmt.bufPrint(&buf, "{s}", .{self.value.?.identifier.string()}) catch unreachable;
+            }
+            _ = std.fmt.bufPrint(&buf, ";", .{}) catch unreachable;
+
+            return &buf;
         }
     };
 
     pub const ReturnStatement = struct {
         const Self = @This();
         token: Token,
-        value: ?Expression,
+        returnValue: ?Expression,
+
+        pub fn string(self: *Self) []const u8 {
+            var buf: [1024]u8 = undefined;
+            _ = std.fmt.bufPrint(&buf, "{s} + ", .{self.token.literal}) catch unreachable;
+
+            if (self.returnValue != null) {
+                _ = std.fmt.bufPrint(&buf, "{s}", .{self.returnValue.?.identifier.string()}) catch unreachable;
+            }
+
+            _ = std.fmt.bufPrint(&buf, ";", .{}) catch unreachable;
+
+            return &buf;
+        }
     };
 
     pub const ExpressionStatement = struct {
+        const Self = @This();
         token: Token,
-        value: ?Expression,
+        expression: ?Expression,
+
+        pub fn string(self: *Self) []const u8 {
+            if (self.expression != null) {
+                return self.expression.?.identifier.string();
+            }
+            return "";
+        }
     };
 };
 
@@ -52,12 +84,12 @@ pub const Identifier = struct {
         };
     }
 
-    pub fn tokenLiteral(self: *Identifier) []const u8 {
+    pub fn tokenLiteral(self: Identifier) []const u8 {
         return self.token.literal;
     }
 
-    pub fn printValue(self: *Identifier) !void {
-        print("{s}", .{self.value});
+    pub fn string(self: *Identifier) []const u8 {
+        return self.value;
     }
 };
 
@@ -82,6 +114,20 @@ pub const Program = struct {
         } else {
             return "";
         }
+    }
+
+    pub fn string(self: *Program) ![]const u8 {
+        var buff = std.ArrayList(u8).init(self.allocator);
+        defer buff.deinit();
+        for (self.statements.items) |value| {
+            switch (value) {
+                .letStatement => try std.fmt.bufPrint(&buff.writer(), "{s}", .{value.letStatement.string()}),
+                .returnStatement => try std.fmt.bufPrint(&buff.writer(), "{s}", .{value.returnStatement.string()}),
+                .expression => try std.fmt.bufPrint(&buff.writer(), "{s}", .{value.expression.string()}),
+            }
+        }
+
+        return buff.toOwnedSlice();
     }
 };
 
