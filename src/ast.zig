@@ -24,15 +24,21 @@ pub const Statement = union(enum) {
             print("{} {} \n", .{ self.token.literal, self.value.?.identifier.value });
         }
 
-        pub fn string(self: *Self) []const u8 {
-            var buf: [1024]u8 = undefined;
-            _ = std.fmt.bufPrint(&buf, "{s} {s} =", .{ self.token.literal, self.name.tokenLiteral() }) catch unreachable;
+        pub fn string(self: Self, writer: *std.ArrayList(u8).Writer) []const u8 {
+            // var buf: [1024]u8 = undefined;
+            // _ = std.fmt.bufPrint(&buf, "{s} {s} =", .{ self.token.literal, self.name.tokenLiteral() }) catch unreachable;
+            _ = writer.write(self.token.literal) catch unreachable;
+            _ = writer.write(" ") catch unreachable;
+            _ = writer.write(self.name.tokenLiteral()) catch unreachable;
             if (self.value != null) {
-                _ = std.fmt.bufPrint(&buf, "{s}", .{self.value.?.identifier.string()}) catch unreachable;
+                // _ = std.fmt.bufPrint(&buf, "{s}", .{self.value.?.identifier.string()}) catch unreachable;
+                print("Writing Expression", .{});
+                _ = writer.write(self.value.?.identifier.string()) catch unreachable;
             }
-            _ = std.fmt.bufPrint(&buf, ";", .{}) catch unreachable;
+            _ = writer.write(";") catch unreachable;
+            // _ = std.fmt.bufPrint(&buf, ";", .{}) catch unreachable;
 
-            return &buf;
+            return writer.context.items;
         }
     };
 
@@ -41,17 +47,20 @@ pub const Statement = union(enum) {
         token: Token,
         returnValue: ?Expression,
 
-        pub fn string(self: *Self) []const u8 {
-            var buf: [1024]u8 = undefined;
-            _ = std.fmt.bufPrint(&buf, "{s} + ", .{self.token.literal}) catch unreachable;
+        pub fn string(self: Self, writer: *std.ArrayList(u8).Writer) []const u8 {
+            // var buf: [1024]u8 = undefined;
+            // _ = std.fmt.bufPrint(&buf, "{s} + ", .{self.token.literal}) catch unreachable;
+            writer.writeAll(self.token.literal) catch unreachable;
+            writer.writeAll(" ") catch unreachable;
 
             if (self.returnValue != null) {
-                _ = std.fmt.bufPrint(&buf, "{s}", .{self.returnValue.?.identifier.string()}) catch unreachable;
+                // _ = std.fmt.bufPrint(&buf, "{s}", .{self.returnValue.?.identifier.string()}) catch unreachable;
+                writer.writeAll(self.returnValue.?.identifier.string()) catch unreachable;
             }
 
-            _ = std.fmt.bufPrint(&buf, ";", .{}) catch unreachable;
-
-            return &buf;
+            // _ = std.fmt.bufPrint(&buf, ";", .{}) catch unreachable;
+            writer.writeAll(";") catch unreachable;
+            return writer.context.items;
         }
     };
 
@@ -60,7 +69,7 @@ pub const Statement = union(enum) {
         token: Token,
         expression: ?Expression,
 
-        pub fn string(self: *Self) []const u8 {
+        pub fn string(self: Self) []const u8 {
             if (self.expression != null) {
                 return self.expression.?.identifier.string();
             }
@@ -88,7 +97,7 @@ pub const Identifier = struct {
         return self.token.literal;
     }
 
-    pub fn string(self: *Identifier) []const u8 {
+    pub fn string(self: Identifier) []const u8 {
         return self.value;
     }
 };
@@ -116,18 +125,26 @@ pub const Program = struct {
         }
     }
 
-    pub fn string(self: *Program) ![]const u8 {
+    pub fn string(self: *Program) !std.ArrayList(u8) {
         var buff = std.ArrayList(u8).init(self.allocator);
-        defer buff.deinit();
+        var writer = buff.writer();
         for (self.statements.items) |value| {
             switch (value) {
-                .letStatement => try std.fmt.bufPrint(&buff.writer(), "{s}", .{value.letStatement.string()}),
-                .returnStatement => try std.fmt.bufPrint(&buff.writer(), "{s}", .{value.returnStatement.string()}),
-                .expression => try std.fmt.bufPrint(&buff.writer(), "{s}", .{value.expression.string()}),
+                .letStatement => {
+                    print("In letstatement {s}\n", .{value.letStatement.value.?.identifier.string()});
+                    _ = try writer.write(value.letStatement.string(&writer));
+                },
+                .returnStatement => {
+                    print("In returnstatement {any}\n", .{value});
+                    _ = try writer.write(value.returnStatement.string(&writer));
+                },
+                .expression => {
+                    print("In expression {any}\n", .{value});
+                    _ = try writer.write(value.expression.string());
+                },
             }
         }
-
-        return buff.toOwnedSlice();
+        return buff;
     }
 };
 

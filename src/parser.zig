@@ -222,22 +222,22 @@ test "TestString" {
 
     std.debug.print("\n{any}\n", .{program.statements.items});
 
-    var prog = program.statements.items[0];
-    prog.letStatement.value = Ast.Expression{ .identifier = Ast.Identifier.init(Token{
+    program.statements.items[0].letStatement.value = Ast.Expression{ .identifier = Ast.Identifier.init(Token{
         .literal = "anothervar",
         .tType = .IDENT,
     }) };
-    try Pretty.print(allocator, prog, .{});
+    try Pretty.print(allocator, program.statements.items[0], .{});
     // const stringer = switch (smt) {
     //     .expression => smt.expression.string(),
     //     .letStatement => smt.letStatement.string(),
     //     .returnStatement => smt.returnStatement.string(),
     // };
     const stringer = try program.string();
-    std.debug.print("\n{any}\n", .{stringer});
+    std.debug.print("\n{s}\n", .{stringer.items});
 
     defer program.deinit();
     defer parser.deinit();
+    defer stringer.deinit();
 }
 // test "TestLetStatements Bad" {
 //     const allocator = std.testing.allocator;
