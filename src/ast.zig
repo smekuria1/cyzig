@@ -32,10 +32,12 @@ pub const Statement = union(enum) {
             _ = writer.write(self.name.tokenLiteral()) catch unreachable;
             if (self.value != null) {
                 // _ = std.fmt.bufPrint(&buf, "{s}", .{self.value.?.identifier.string()}) catch unreachable;
-                print("Writing Expression", .{});
-                _ = writer.write(self.value.?.identifier.string()) catch unreachable;
+                _ = writer.write(" = ") catch unreachable;
+                const tmp = self.value.?.identifier.tokenLiteral();
+                // print("Writing Expression {s}\n", .{tmp});
+                _ = writer.write(tmp) catch unreachable;
             }
-            _ = writer.write(";") catch unreachable;
+            _ = writer.write(";\n") catch unreachable;
             // _ = std.fmt.bufPrint(&buf, ";", .{}) catch unreachable;
 
             return writer.context.items;
@@ -59,7 +61,7 @@ pub const Statement = union(enum) {
             }
 
             // _ = std.fmt.bufPrint(&buf, ";", .{}) catch unreachable;
-            writer.writeAll(";") catch unreachable;
+            writer.writeAll(";\n") catch unreachable;
             return writer.context.items;
         }
     };
@@ -69,9 +71,11 @@ pub const Statement = union(enum) {
         token: Token,
         expression: ?Expression,
 
-        pub fn string(self: Self) []const u8 {
+        pub fn string(self: Self, writer: *std.ArrayList(u8).Writer) []const u8 {
             if (self.expression != null) {
-                return self.expression.?.identifier.string();
+                const tmp = self.expression.?.identifier.string();
+                _ = writer.write(tmp) catch unreachable;
+                return writer.context.items;
             }
             return "";
         }
@@ -80,6 +84,27 @@ pub const Statement = union(enum) {
 
 pub const Expression = union(enum) {
     identifier: Identifier,
+    integerLiteral: IntegerLiteral,
+};
+
+pub const IntegerLiteral = struct {
+    token: Token,
+    value: i64,
+
+    // pub fn init(token: Token) IntegerLiteral {
+    //     return .{
+    //         .token = token,
+    //         .value = @intCast(),
+    //     };
+    // }
+
+    pub fn tokenLiteral(self: IntegerLiteral) []const u8 {
+        return self.token.literal;
+    }
+
+    pub fn string(self: IntegerLiteral) []const u8 {
+        return self.token.literal;
+    }
 };
 
 pub const Identifier = struct {
@@ -131,16 +156,16 @@ pub const Program = struct {
         for (self.statements.items) |value| {
             switch (value) {
                 .letStatement => {
-                    print("In letstatement {s}\n", .{value.letStatement.value.?.identifier.string()});
-                    _ = try writer.write(value.letStatement.string(&writer));
+                    // print("In letstatement {s}\n", .{value.letStatement.value.?.identifier.string()});
+                    _ = value.letStatement.string(&writer);
                 },
                 .returnStatement => {
-                    print("In returnstatement {any}\n", .{value});
-                    _ = try writer.write(value.returnStatement.string(&writer));
+                    // print("In returnstatement {any}\n", .{value});
+                    _ = value.returnStatement.string(&writer);
                 },
                 .expression => {
-                    print("In expression {any}\n", .{value});
-                    _ = try writer.write(value.expression.string());
+                    // print("In expression {s}\n", .{value.expression.expression.?.identifier.value});
+                    _ = value.expression.string(&writer);
                 },
             }
         }
@@ -150,22 +175,27 @@ pub const Program = struct {
 
 pub fn GenericAst(comptime T: type) type {
     return struct {
-        list: std.ArrayList(T),
+        list: []T,
+        pos: usize = 0,
         allocator: std.mem.Allocator,
 
         pub fn init(allocator: std.mem.Allocator) !GenericAst(T) {
             return .{
                 .allocator = allocator,
-                .list = std.ArrayList(T).init(allocator),
+                .list = try allocator.alloc(T, 32),
             };
         }
 
         pub fn deinit(self: *GenericAst(T)) void {
-            self.list.deinit();
+            self.allocator.free(self.list);
         }
 
-        pub fn append(self: *GenericAst(T), value: T) !void {
-            try self.list.append(value);
+        // pub fn append(self: *GenericAst(T), value: T) void {
+        //     try self.list.append(value);
+        // }
+
+        pub fn insert(self: *GenericAst(T), value: T, pos: usize) void {
+            self.list[pos] = value;
         }
     };
 }
