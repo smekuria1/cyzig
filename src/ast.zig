@@ -73,9 +73,23 @@ pub const Statement = union(enum) {
 
         pub fn string(self: Self, writer: *std.ArrayList(u8).Writer) []const u8 {
             if (self.expression != null) {
-                const tmp = self.expression.?.identifier.string();
-                _ = writer.write(tmp) catch unreachable;
-                return writer.context.items;
+                switch (self.expression.?) {
+                    .identifier => {
+                        const tmp = self.expression.?.identifier.string();
+                        _ = writer.write(tmp) catch unreachable;
+                        return writer.context.items;
+                    },
+                    .integerLiteral => {
+                        const tmp = self.expression.?.integerLiteral.string();
+                        _ = writer.write(tmp) catch unreachable;
+                        return writer.context.items;
+                    },
+                    .prefixExp => {
+                        _ = self.expression.?.prefixExp.string(writer);
+
+                        return writer.context.items;
+                    },
+                }
             }
             return "";
         }
@@ -85,6 +99,7 @@ pub const Statement = union(enum) {
 pub const Expression = union(enum) {
     identifier: Identifier,
     integerLiteral: IntegerLiteral,
+    prefixExp: PrefixExpression,
 };
 
 pub const IntegerLiteral = struct {
@@ -103,7 +118,35 @@ pub const IntegerLiteral = struct {
     }
 
     pub fn string(self: IntegerLiteral) []const u8 {
+        print("In integerLiteral String {}\n", .{self.token});
         return self.token.literal;
+    }
+};
+
+pub const PrefixExpression = struct {
+    token: Token,
+    operator: []const u8,
+    right: *Expression,
+
+    pub fn tokenLiteral(self: PrefixExpression) []const u8 {
+        return self.token.literal;
+    }
+
+    pub fn string(self: PrefixExpression, writer: *std.ArrayList(u8).Writer) []const u8 {
+        _ = writer.write("(") catch unreachable;
+        _ = writer.write(self.operator) catch unreachable;
+        print("\nIn PrefixExp Right token {}\n", .{self.right.*.integerLiteral});
+        print("^^ Operator {any}\n", .{self.operator});
+        _ = switch (self.right.*) {
+            .identifier => |id| writer.write(id.string()) catch unreachable,
+            .integerLiteral => |int| writer.write(int.string()) catch unreachable,
+            else => {
+                _ = writer.write(self.tokenLiteral()) catch unreachable;
+            },
+        };
+        _ = writer.write(")") catch unreachable;
+
+        return writer.context.items;
     }
 };
 
@@ -123,6 +166,7 @@ pub const Identifier = struct {
     }
 
     pub fn string(self: Identifier) []const u8 {
+        print("In identifier String {}\n", .{self});
         return self.value;
     }
 };
