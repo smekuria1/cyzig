@@ -15,10 +15,10 @@ pub fn start(allocator: std.mem.Allocator) !void {
             // const line = std.mem.trimRight(u8, value[0 .. value.len - 1], "\r");
             var lexer = Lexer.init(allocator, value);
 
-            var token = lexer.nextToken();
+            var token = lexer.nextToken(lexer.arenaAlloc.allocator());
             while (token.?.tType != TokenType.EOF) {
                 std.debug.print("{any} -- {s}\n", .{ token.?.tType, token.?.literal });
-                token = lexer.nextToken();
+                token = lexer.nextToken(lexer.arenaAlloc.allocator());
             }
         }
     }

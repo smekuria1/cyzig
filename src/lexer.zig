@@ -12,9 +12,12 @@ pub const Lexer = struct {
     ch: u8,
     keywordMap: std.StringHashMap(TokenType),
     allocator: Allocator,
+    arenaAlloc: std.heap.ArenaAllocator,
 
     pub fn init(allocator: Allocator, input: []const u8) *Lexer {
         var lexer = allocator.create(Lexer) catch unreachable;
+        const arena = std.heap.ArenaAllocator.init(allocator);
+        lexer.arenaAlloc = arena;
         lexer.allocator = allocator;
         lexer.input = input;
         lexer.read_position = 0;
@@ -26,6 +29,7 @@ pub const Lexer = struct {
 
     pub fn deinit(self: *Lexer) void {
         self.keywordMap.deinit();
+        self.arenaAlloc.deinit();
         self.allocator.destroy(self);
     }
 
@@ -49,13 +53,12 @@ pub const Lexer = struct {
     }
 
     fn newToken(allocator: Allocator, tType: TokenType, ch: u8) Token {
-        var lit = [_]u8{'1'};
+        var lit = allocator.alloc(u8, 1) catch unreachable;
         lit[0] = ch;
-        //std.debug.print("In newToken {any}\n", .{lit});
-        _ = allocator;
         return Token{
             .tType = tType,
-            .literal = &lit,
+            .literal = lit,
+            .alloc = true,
         };
     }
 
@@ -113,7 +116,7 @@ pub const Lexer = struct {
         }
     }
 
-    pub fn nextToken(self: *Lexer) ?Token {
+    pub fn nextToken(self: *Lexer, arenaAllocator: Allocator) ?Token {
         var tok: Token = undefined;
         self.skipWhiteSpace();
         // std.debug.print("\nPosition {any}\n", .{self.position});
@@ -132,14 +135,14 @@ pub const Lexer = struct {
                         .tType = TokenType.EQ,
                     };
                 } else {
-                    tok = newToken(self.allocator, TokenType.ASSIGN, self.ch);
+                    tok = newToken(arenaAllocator, TokenType.ASSIGN, self.ch);
                 }
             },
             '+' => {
-                tok = newToken(self.allocator, TokenType.PLUS, self.ch);
+                tok = newToken(arenaAllocator, TokenType.PLUS, self.ch);
             },
             '-' => {
-                tok = newToken(self.allocator, TokenType.MINUS, self.ch);
+                tok = newToken(arenaAllocator, TokenType.MINUS, self.ch);
             },
             '!' => {
                 if (self.peekChar() == '=') {
@@ -154,38 +157,38 @@ pub const Lexer = struct {
                         .tType = TokenType.NOT_EQ,
                     };
                 } else {
-                    tok = newToken(self.allocator, TokenType.BANG, self.ch);
+                    tok = newToken(arenaAllocator, TokenType.BANG, self.ch);
                 }
             },
             '*' => {
-                tok = newToken(self.allocator, TokenType.ASTERISK, self.ch);
+                tok = newToken(arenaAllocator, TokenType.ASTERISK, self.ch);
             },
             '/' => {
-                tok = newToken(self.allocator, TokenType.SLASH, self.ch);
+                tok = newToken(arenaAllocator, TokenType.SLASH, self.ch);
             },
             '<' => {
-                tok = newToken(self.allocator, TokenType.LT, self.ch);
+                tok = newToken(arenaAllocator, TokenType.LT, self.ch);
             },
             '>' => {
-                tok = newToken(self.allocator, TokenType.GT, self.ch);
+                tok = newToken(arenaAllocator, TokenType.GT, self.ch);
             },
             ',' => {
-                tok = newToken(self.allocator, TokenType.COMMA, self.ch);
+                tok = newToken(arenaAllocator, TokenType.COMMA, self.ch);
             },
             ';' => {
-                tok = newToken(self.allocator, TokenType.SEMICOLON, self.ch);
+                tok = newToken(arenaAllocator, TokenType.SEMICOLON, self.ch);
             },
             '(' => {
-                tok = newToken(self.allocator, TokenType.LPAREN, self.ch);
+                tok = newToken(arenaAllocator, TokenType.LPAREN, self.ch);
             },
             ')' => {
-                tok = newToken(self.allocator, TokenType.RPAREN, self.ch);
+                tok = newToken(arenaAllocator, TokenType.RPAREN, self.ch);
             },
             '{' => {
-                tok = newToken(self.allocator, TokenType.LBRACE, self.ch);
+                tok = newToken(arenaAllocator, TokenType.LBRACE, self.ch);
             },
             '}' => {
-                tok = newToken(self.allocator, TokenType.RBRACE, self.ch);
+                tok = newToken(arenaAllocator, TokenType.RBRACE, self.ch);
             },
 
             0 => {
@@ -203,7 +206,7 @@ pub const Lexer = struct {
                     tok.literal = self.readNumber();
                     return tok;
                 } else {
-                    tok = newToken(self.allocator, TokenType.ILLEGAL, self.ch);
+                    tok = newToken(arenaAllocator, TokenType.ILLEGAL, self.ch);
                 }
             },
         }
@@ -218,7 +221,7 @@ pub const Lexer = struct {
 //     const allocator = std.testing.allocator;
 //     const input =
 //         \\let five = 5;
-//         \\let ten = 10;
+//         \\let ten != 10;
 //         \\let add = fn(x, y) {
 //         \\              x + y;
 //         \\               };
@@ -302,11 +305,12 @@ pub const Lexer = struct {
 //         // Token{ .tType = .EOF, .literal = "" },
 //     };
 //     var i: usize = 0;
-//     while (lexer.nextToken()) |token| : (i += 1) {
+//     const arenaalloc = lexer.arenaAlloc.allocator();
+//     while (lexer.nextToken(arenaalloc)) |token| : (i += 1) {
 //         if (i >= expected_tokens.len) {
 //             break;
 //         }
-//         std.debug.print("\n{any} {s} {s} \n", .{ token.tType, token.literal, expected_tokens[i].literal });
-//         try std.testing.expectEqual(expected_tokens[i].tType, token.tType);
+//         std.debug.print("\n{any} TokenLit {s} ExpectedLit {s} \n", .{ token.tType, token.literal, expected_tokens[i].literal });
+//         // try std.testing.expectEqual(expected_tokens[i].tType, token.tType);
 //     }
 // }

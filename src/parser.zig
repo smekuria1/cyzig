@@ -33,8 +33,8 @@ pub const Parser = struct {
         parser.l = l;
         const err = std.ArrayList(string).init(allocator);
         parser.errors = err;
-        parser.nextToken();
-        parser.nextToken();
+        parser.nextToken(l.arenaAlloc.allocator());
+        parser.nextToken(l.arenaAlloc.allocator());
         parser.prefixParseFns = Ast.GenericAst(prefixParseFn).init(allocator) catch unreachable;
         parser.infixParseFns = Ast.GenericAst(infixParseFn).init(allocator) catch unreachable;
         parser.registerPrefix(TokenType.IDENT, parseIdentifier) catch unreachable;
@@ -63,9 +63,9 @@ pub const Parser = struct {
         self.allocator.destroy(self);
     }
 
-    pub fn nextToken(self: *Parser) void {
+    pub fn nextToken(self: *Parser, arenaAllocator: Allocator) void {
         self.curToken = self.peekToken;
-        self.peekToken = self.l.nextToken().?;
+        self.peekToken = self.l.nextToken(arenaAllocator).?;
     }
 
     pub fn Errors(self: *Parser) []string {
@@ -92,12 +92,13 @@ pub const Parser = struct {
 
     pub fn parseProgram(self: *Parser) Ast.Program {
         var program = Ast.Program.init(self.allocator);
+        const arena = self.l.arenaAlloc.allocator();
         while (self.curToken.tType != .EOF) {
             const stmt = self.parseStatement();
             if (stmt) |s| {
                 program.statements.append(s) catch unreachable;
             }
-            self.nextToken();
+            self.nextToken(arena);
         }
 
         return program;
@@ -141,7 +142,7 @@ pub const Parser = struct {
 
         stmt.expression = self.parseExpression(.LOWEST);
         if (self.peekTokenIs(.SEMICOLON)) {
-            self.nextToken();
+            self.nextToken(self.l.arenaAlloc.allocator());
         }
 
         return Ast.Statement{ .expression = stmt };
@@ -159,7 +160,7 @@ pub const Parser = struct {
             .right = undefined,
         };
 
-        self.nextToken();
+        self.nextToken(self.l.arenaAlloc.allocator());
         expression.right = @constCast(&self.parseExpression(.LOWEST).?);
 
         return Ast.Expression{
@@ -169,8 +170,8 @@ pub const Parser = struct {
 
     pub fn parseExpression(self: *Parser, prec: Precedence) ?Ast.Expression {
         /////////TODO:
-        std.debug.print("{any}\n", .{self.curToken.tType});
-        std.debug.print("\nParse Funtion {any}\n", .{self.prefixParseFns.list[6]});
+        // std.debug.print("{any}\n", .{self.curToken.tType});
+        // std.debug.print("\nParse Funtion {any}\n", .{self.prefixParseFns.list[6]});
         const prefix = self.prefixParseFns.list[@intFromEnum(self.curToken.tType)];
         if (prefix == undefined) {
             self.noPrefixParseFnError(self.curToken.tType);
@@ -188,11 +189,11 @@ pub const Parser = struct {
             .returnValue = undefined,
         };
 
-        self.nextToken();
+        self.nextToken(self.l.arenaAlloc.allocator());
 
         // TODO: skipping expressions until semicolon
         while (!self.curTokenIs(.SEMICOLON)) {
-            self.nextToken();
+            self.nextToken(self.l.arenaAlloc.allocator());
         }
 
         return Ast.Statement{ .returnStatement = stmt };
@@ -214,7 +215,7 @@ pub const Parser = struct {
         }
 
         while (!self.curTokenIs(.SEMICOLON)) {
-            self.nextToken();
+            self.nextToken(self.l.arenaAlloc.allocator());
         }
         return Ast.Statement{ .letStatement = stmt };
     }
@@ -229,7 +230,7 @@ pub const Parser = struct {
 
     pub fn expectPeek(self: *Parser, tType: TokenType) bool {
         if (self.peekTokenIs(tType)) {
-            self.nextToken();
+            self.nextToken(self.l.arenaAlloc.allocator());
             return true;
         } else {
             self.peekError(tType);
@@ -241,7 +242,8 @@ pub const Parser = struct {
 test "TestPrefixExpression\n" {
     const allocator = std.testing.allocator;
     const input =
-        \\!5;
+        \\!solo;
+        \\-20;
     ;
     var l = Lexer.init(allocator, input);
     defer l.deinit();
@@ -252,7 +254,7 @@ test "TestPrefixExpression\n" {
     // try Pretty.print(allocator, program.statements.items[0], .{});
 
     const stringer = try program.string();
-    std.debug.print("Test out {s}\n", .{stringer.items});
+    std.debug.print("Test out {any}\n", .{stringer.items});
 
     // try std.testing.expectEqualSlices(u8, "5", stringer.items);
     defer program.deinit();

@@ -3,6 +3,7 @@ const Allocator = std.mem.Allocator;
 pub const Token = struct {
     tType: TokenType,
     literal: []const u8,
+    alloc: bool = false,
 };
 
 pub const TokenType = enum(u8) {

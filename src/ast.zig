@@ -118,7 +118,7 @@ pub const IntegerLiteral = struct {
     }
 
     pub fn string(self: IntegerLiteral) []const u8 {
-        print("In integerLiteral String {}\n", .{self.token});
+        // print("In integerLiteral String {}\n", .{self.token});
         return self.token.literal;
     }
 };
@@ -135,8 +135,8 @@ pub const PrefixExpression = struct {
     pub fn string(self: PrefixExpression, writer: *std.ArrayList(u8).Writer) []const u8 {
         _ = writer.write("(") catch unreachable;
         _ = writer.write(self.operator) catch unreachable;
-        print("\nIn PrefixExp Right token {}\n", .{self.right.*.integerLiteral});
-        print("^^ Operator {any}\n", .{self.operator});
+        // print("\nIn PrefixExp Right token {}\n", .{self.right.*.integerLiteral});
+        // print("^^ Operator {s}\n", .{self.operator});
         _ = switch (self.right.*) {
             .identifier => |id| writer.write(id.string()) catch unreachable,
             .integerLiteral => |int| writer.write(int.string()) catch unreachable,
