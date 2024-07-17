@@ -53,13 +53,38 @@ pub const Lexer = struct {
     }
 
     fn newToken(allocator: Allocator, tType: TokenType, ch: u8) Token {
-        var lit = allocator.alloc(u8, 1) catch unreachable;
-        lit[0] = ch;
-        return Token{
-            .tType = tType,
-            .literal = lit,
-            .alloc = true,
-        };
+        switch (tType) {
+            .NOT_EQ => {
+                var lit = allocator.alloc(u8, 2) catch unreachable;
+                lit[0] = ch;
+                lit[1] = @as(u8, 61);
+                return Token{
+                    .tType = tType,
+                    .literal = lit,
+                    .alloc = true,
+                };
+            },
+            .EQ => {
+                std.debug.print("In EQ {any}\n", .{ch});
+                var lit = allocator.alloc(u8, 2) catch unreachable;
+                lit[0] = ch;
+                lit[1] = ch;
+                return Token{
+                    .tType = tType,
+                    .literal = lit,
+                    .alloc = true,
+                };
+            },
+            inline else => {
+                var lit = allocator.alloc(u8, 1) catch unreachable;
+                lit[0] = ch;
+                return Token{
+                    .tType = tType,
+                    .literal = lit,
+                    .alloc = true,
+                };
+            },
+        }
     }
 
     pub fn isLetter(ch: u8) bool {
@@ -126,14 +151,7 @@ pub const Lexer = struct {
                 if (self.peekChar() == '=') {
                     const ch = self.ch;
                     self.readChar();
-                    //////////SCUFFED WAY OF CREATING STRING SLICE THINGY PLEASE FIX THIS SHIT
-                    var lit = [_]u8{ '1', '1' };
-                    lit[0] = ch;
-                    lit[1] = self.ch;
-                    tok = Token{
-                        .literal = &lit,
-                        .tType = TokenType.EQ,
-                    };
+                    tok = newToken(arenaAllocator, .EQ, ch);
                 } else {
                     tok = newToken(arenaAllocator, TokenType.ASSIGN, self.ch);
                 }
@@ -148,14 +166,7 @@ pub const Lexer = struct {
                 if (self.peekChar() == '=') {
                     const ch = self.ch;
                     self.readChar();
-                    //////////SCUFFED WAY OF CREATING STRING SLICE THINGY PLEASE FIX THIS SHIT
-                    var lit = [_]u8{ '1', '1' };
-                    lit[0] = ch;
-                    lit[1] = self.ch;
-                    tok = Token{
-                        .literal = &lit,
-                        .tType = TokenType.NOT_EQ,
-                    };
+                    tok = newToken(arenaAllocator, .NOT_EQ, ch);
                 } else {
                     tok = newToken(arenaAllocator, TokenType.BANG, self.ch);
                 }
@@ -220,7 +231,7 @@ pub const Lexer = struct {
 // test "TestNextToken" {
 //     const allocator = std.testing.allocator;
 //     const input =
-//         \\let five = 5;
+//         \\let five == 5;
 //         \\let ten != 10;
 //         \\let add = fn(x, y) {
 //         \\              x + y;

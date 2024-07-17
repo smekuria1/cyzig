@@ -162,7 +162,7 @@ pub const Parser = struct {
 
         self.nextToken(self.l.arenaAlloc.allocator());
         expression.right = @constCast(&self.parseExpression(.LOWEST).?);
-
+        std.debug.print("In ParsePrefixExpression {any}\n", .{expression.tokenLiteral()});
         return Ast.Expression{
             .prefixExp = expression,
         };
@@ -242,8 +242,7 @@ pub const Parser = struct {
 test "TestPrefixExpression\n" {
     const allocator = std.testing.allocator;
     const input =
-        \\!solo;
-        \\-20;
+        \\!20;
     ;
     var l = Lexer.init(allocator, input);
     defer l.deinit();
@@ -254,7 +253,7 @@ test "TestPrefixExpression\n" {
     // try Pretty.print(allocator, program.statements.items[0], .{});
 
     const stringer = try program.string();
-    std.debug.print("Test out {any}\n", .{stringer.items});
+    std.debug.print("Test out {s}\n", .{stringer.items});
 
     // try std.testing.expectEqualSlices(u8, "5", stringer.items);
     defer program.deinit();
