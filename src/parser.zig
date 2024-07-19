@@ -240,6 +240,8 @@ pub const Parser = struct {
 };
 
 test "TestPrefixExpression\n" {
+    // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    // const allocator = gpa.allocator();
     const allocator = std.testing.allocator;
     const input =
         \\!20;
