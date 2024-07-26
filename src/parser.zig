@@ -7,7 +7,7 @@ const Allocator = std.mem.Allocator;
 const Pretty = @import("./pretty.zig");
 const string = []const u8;
 const prefixParseFn = *const fn (self: *Parser) Ast.Expression;
-const infixParseFn = *const fn (exp: Ast.Expression) Ast.Expression;
+const infixParseFn = *const fn (slef: *Parser, exp: Ast.Expression) Ast.Expression;
 const Precedence = enum {
     LOWEST,
     EQUALS,
@@ -17,6 +17,17 @@ const Precedence = enum {
     PREFIX,
     CALL,
 };
+
+fn initPrecedenceTable(table: *std.AutoHashMap(TokenType, Precedence)) void {
+    table.put(.EQ, .EQUALS) catch unreachable;
+    table.put(.NOT_EQ, .EQUALS) catch unreachable;
+    table.put(.LT, .LESSGREATER) catch unreachable;
+    table.put(.GT, .LESSGREATER) catch unreachable;
+    table.put(.MINUS, .SUM) catch unreachable;
+    table.put(.PLUS, .SUM) catch unreachable;
+    table.put(.SLASH, .PRODUCT) catch unreachable;
+    table.put(.ASTERISK, .PRODUCT) catch unreachable;
+}
 pub const Parser = struct {
     l: *Lexer,
     curToken: Token,
@@ -24,6 +35,7 @@ pub const Parser = struct {
     errors: std.ArrayList(string),
     allocator: Allocator,
 
+    precedences: std.AutoHashMap(TokenType, Precedence),
     prefixParseFns: Ast.GenericAst(prefixParseFn),
     infixParseFns: Ast.GenericAst(infixParseFn),
 
@@ -37,11 +49,20 @@ pub const Parser = struct {
         parser.nextToken(l.arenaAlloc.allocator());
         parser.prefixParseFns = Ast.GenericAst(prefixParseFn).init(allocator) catch unreachable;
         parser.infixParseFns = Ast.GenericAst(infixParseFn).init(allocator) catch unreachable;
-        parser.registerPrefix(TokenType.IDENT, parseIdentifier) catch unreachable;
-        parser.registerPrefix(TokenType.INT, parseIntegerLiteral) catch unreachable;
-        parser.registerPrefix(TokenType.BANG, parsePrefixExpression) catch unreachable;
-        parser.registerPrefix(TokenType.MINUS, parsePrefixExpression) catch unreachable;
+        parser.registerPrefix(.IDENT, parseIdentifier) catch unreachable;
+        parser.registerPrefix(.INT, parseIntegerLiteral) catch unreachable;
+        parser.registerPrefix(.BANG, parsePrefixExpression) catch unreachable;
+        parser.registerPrefix(.PLUS, parsePrefixExpression) catch unreachable;
+        parser.registerInfix(.MINUS, parseInfixExpression) catch unreachable;
+        parser.registerInfix(.SLASH, parseInfixExpression) catch unreachable;
+        parser.registerInfix(.ASTERISK, parseInfixExpression) catch unreachable;
+        parser.registerInfix(.EQ, parseInfixExpression) catch unreachable;
+        parser.registerInfix(.NOT_EQ, parseInfixExpression) catch unreachable;
+        parser.registerInfix(.LT, parseInfixExpression) catch unreachable;
+        parser.registerInfix(.GT, parseInfixExpression) catch unreachable;
 
+        parser.precedences = std.AutoHashMap(TokenType, Precedence).init(parser.allocator);
+        initPrecedenceTable(&parser.precedences);
         return parser;
     }
 
@@ -53,6 +74,23 @@ pub const Parser = struct {
         self.infixParseFns.insert(func, @intFromEnum(tt));
     }
 
+    pub fn peekPrecedence(self: *Parser) Precedence {
+        const prec = self.precedences.get(self.peekToken.tType);
+        if (prec != null) {
+            return prec.?;
+        }
+        return Precedence.LOWEST;
+    }
+
+    pub fn currPrecedence(self: *Parser) Precedence {
+        const prec = self.precedences.get(self.curToken.tType);
+        if (prec != null) {
+            return prec.?;
+        }
+
+        return Precedence.LOWEST;
+    }
+
     pub fn deinit(self: *Parser) void {
         for (self.errors.items) |value| {
             self.allocator.free(value);
@@ -60,6 +98,7 @@ pub const Parser = struct {
         self.errors.deinit();
         self.prefixParseFns.deinit();
         self.infixParseFns.deinit();
+        self.precedences.deinit();
         self.allocator.destroy(self);
     }
 
@@ -86,7 +125,7 @@ pub const Parser = struct {
     }
 
     pub fn peekError(self: *Parser, t: TokenType) void {
-        const msg = std.fmt.allocPrint(self.allocator, "expected next token to be {}, got {} instead", .{ t, self.peekToken.tType }) catch unreachable;
+        const msg = std.fmt.allocPrint(self.allocator, "expected next token to be {}, got {s} instead", .{ t, self.peekToken.literal }) catch unreachable;
         self.errors.append(msg) catch unreachable;
     }
 
@@ -94,6 +133,7 @@ pub const Parser = struct {
         var program = Ast.Program.init(self.allocator);
         const arena = self.l.arenaAlloc.allocator();
         while (self.curToken.tType != .EOF) {
+            // std.log.debug("{any} -- {s}\n", .{ self.curToken.tType, self.curToken.literal });
             const stmt = self.parseStatement();
             if (stmt) |s| {
                 program.statements.append(s) catch unreachable;
@@ -153,6 +193,22 @@ pub const Parser = struct {
         self.errors.append(msg) catch unreachable;
     }
 
+    pub fn parseInfixExpression(self: *Parser, left: Ast.Expression) Ast.Expression {
+        var expression = Ast.InfixExpression{
+            .token = self.curToken,
+            .operator = self.curToken.literal,
+            .left = @constCast(&left),
+            .right = undefined,
+        };
+
+        const prec = self.currPrecedence();
+        self.nextToken(self.l.arenaAlloc.allocator());
+        const right = self.parseExpression(prec).?;
+        expression.right = @constCast(&right);
+
+        return Ast.Expression{ .infixExp = expression };
+    }
+
     pub fn parsePrefixExpression(self: *Parser) Ast.Expression {
         var expression = Ast.PrefixExpression{
             .token = self.curToken,
@@ -162,7 +218,7 @@ pub const Parser = struct {
 
         self.nextToken(self.l.arenaAlloc.allocator());
         expression.right = @constCast(&self.parseExpression(.LOWEST).?);
-        std.debug.print("In ParsePrefixExpression {any}\n", .{expression.tokenLiteral()});
+        //  std.debug.print("In ParsePrefixExpression {any}\n", .{expression.tokenLiteral()});
         return Ast.Expression{
             .prefixExp = expression,
         };
@@ -172,13 +228,26 @@ pub const Parser = struct {
         /////////TODO:
         // std.debug.print("{any}\n", .{self.curToken.tType});
         // std.debug.print("\nParse Funtion {any}\n", .{self.prefixParseFns.list[6]});
-        const prefix = self.prefixParseFns.list[@intFromEnum(self.curToken.tType)];
-        if (prefix == undefined) {
+        const prefExists = self.prefixParseFns.filled.get(@intFromEnum(self.curToken.tType));
+        if (prefExists == null) {
             self.noPrefixParseFnError(self.curToken.tType);
             return null;
         }
-        _ = prec;
-        const leftexp = prefix(self);
+        const prefix = self.prefixParseFns.list[@intFromEnum(self.curToken.tType)];
+
+        var leftexp = prefix(self);
+
+        while (!self.peekTokenIs(.SEMICOLON) and @intFromEnum(prec) < @intFromEnum(self.peekPrecedence())) {
+            const inExists = self.infixParseFns.filled.get(@intFromEnum(self.curToken.tType));
+            if (inExists == null) {
+                return leftexp;
+            }
+            const infix = self.infixParseFns.list[@intFromEnum(self.peekToken.tType)];
+
+            self.nextToken(self.l.arenaAlloc.allocator());
+
+            leftexp = infix(self, leftexp);
+        }
         // std.debug.print("In Parse Expression {s}\n", .{leftexp.identifier.string()});
         return leftexp;
     }
@@ -217,6 +286,13 @@ pub const Parser = struct {
         while (!self.curTokenIs(.SEMICOLON)) {
             self.nextToken(self.l.arenaAlloc.allocator());
         }
+
+        // self.nextToken(self.l.arenaAlloc.allocator());
+        // stmt.value = self.parseExpression(.LOWEST);
+        // if (self.peekTokenIs(.SEMICOLON)) {
+        //     self.nextToken(self.l.arenaAlloc.allocator());
+        // }
+
         return Ast.Statement{ .letStatement = stmt };
     }
 
@@ -238,6 +314,26 @@ pub const Parser = struct {
         }
     }
 };
+test "TestInfixExpression\n" {
+    const allocator = std.testing.allocator;
+    const input =
+        \\5+5;
+    ;
+    var l = Lexer.init(allocator, input);
+    defer l.deinit();
+    var parser = Parser.init(allocator, l);
+    var program = parser.parseProgram();
+    try std.testing.expect(!parser.checkParserErros());
+
+    // try Pretty.print(allocator, program.statements.items[0], .{});
+
+    const stringer = try program.string();
+    std.debug.print("Test out {s}\n", .{stringer.items});
+    defer program.deinit();
+    defer parser.deinit();
+    defer stringer.deinit();
+    // try std.testing.expectEqualSlices(u8, "(!20)", stringer.items);
+}
 
 test "TestPrefixExpression\n" {
     // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -255,170 +351,162 @@ test "TestPrefixExpression\n" {
     // try Pretty.print(allocator, program.statements.items[0], .{});
 
     const stringer = try program.string();
-    std.debug.print("Test out {s}\n", .{stringer.items});
-
-    // try std.testing.expectEqualSlices(u8, "5", stringer.items);
+    // std.debug.print("Test out {s}\n", .{stringer.items});
     defer program.deinit();
     defer parser.deinit();
     defer stringer.deinit();
+    try std.testing.expectEqualSlices(u8, "(!20)", stringer.items);
 }
 
-// test "TestLetStatements Good" {
-//     const allocator = std.testing.allocator;
-//     const input =
-//         \\let x = 5;
-//         \\let y = x;
-//         \\let foobar = 21321;
-//     ;
-//     var l = Lexer.init(allocator, input);
-//     defer l.deinit();
-//     var parser = Parser.init(allocator, l);
-//     var program = parser.parseProgram();
-//     //  try std.testing.expect(parser.checkParserErros());
-//     defer program.deinit();
-//     defer parser.deinit();
+test "TestLetStatements Good" {
+    const allocator = std.testing.allocator;
+    const input =
+        \\let x = 5;
+        \\let y = x;
+        \\let foobar = 21321;
+    ;
+    var l = Lexer.init(allocator, input);
+    defer l.deinit();
+    var parser = Parser.init(allocator, l);
+    var program = parser.parseProgram();
+    defer program.deinit();
+    defer parser.deinit();
+    //  try std.testing.expect(parser.checkParserErros());
 
-//     const expected_idents = [_]Ast.Identifier{
-//         Ast.Identifier.init(Token{ .tType = .IDENT, .literal = "x" }),
-//         Ast.Identifier.init(Token{ .tType = .IDENT, .literal = "y" }),
-//         Ast.Identifier.init(Token{ .tType = .IDENT, .literal = "foobar" }),
-//     };
+    const expected_idents = [_]Ast.Identifier{
+        Ast.Identifier.init(Token{ .tType = .IDENT, .literal = "x" }),
+        Ast.Identifier.init(Token{ .tType = .IDENT, .literal = "y" }),
+        Ast.Identifier.init(Token{ .tType = .IDENT, .literal = "foobar" }),
+    };
 
-//     for (expected_idents, 0..) |ident, i| {
-//         const statement = program.statements.items[i];
-//         const ls = statement.letStatement;
-//         const literal = ls.name.tokenLiteral();
+    for (expected_idents, 0..) |ident, i| {
+        const statement = program.statements.items[i];
+        const ls = statement.letStatement;
+        const literal = ls.name.tokenLiteral();
 
-//         // std.debug.print("\n ====== \n statements: {any}\n ", .{statement});
-//         try std.testing.expect(ls.token.tType == .LET);
+        // std.debug.print("\n ====== \n statements: {any}\n ", .{statement});
+        try std.testing.expect(ls.token.tType == .LET);
 
-//         // Compare token literal
-//         std.testing.expect(std.mem.eql(u8, ident.value, literal)) catch {
-//             std.debug.print("Expected: {s}, got: {s}\n", .{ ident.value, literal });
-//             return error.literalmismatch;
-//         };
-//     }
-// }
+        // Compare token literal
+        std.testing.expect(std.mem.eql(u8, ident.value, literal)) catch {
+            std.debug.print("Expected: {s}, got: {s}\n", .{ ident.value, literal });
+            return error.literalmismatch;
+        };
+    }
+}
 
-// test "Test ReturnStatement" {
-//     const allocator = std.testing.allocator;
-//     const input =
-//         \\return 5;
-//         \\return x;
-//         \\return y + x;
-//     ;
-//     var l = Lexer.init(allocator, input);
-//     defer l.deinit();
-//     var parser = Parser.init(allocator, l);
-//     var program = parser.parseProgram();
-//     defer program.deinit();
-//     defer parser.deinit();
-//     // try Pretty.print(allocator, program, .{});
-//     try std.testing.expect(!parser.checkParserErros());
-//     try std.testing.expectEqualDeep(3, program.statements.items.len);
+test "Test ReturnStatement" {
+    const allocator = std.testing.allocator;
+    const input =
+        \\return 5;
+        \\return x;
+        \\return y + x;
+    ;
+    var l = Lexer.init(allocator, input);
+    defer l.deinit();
+    var parser = Parser.init(allocator, l);
+    var program = parser.parseProgram();
+    defer program.deinit();
+    defer parser.deinit();
+    // try Pretty.print(allocator, program, .{});
+    try std.testing.expect(!parser.checkParserErros());
+    try std.testing.expectEqualDeep(3, program.statements.items.len);
 
-//     for (program.statements.items) |value| {
-//         try std.testing.expect(checkTokenTypeMatch(value, .RETURN));
-//     }
-// }
+    for (program.statements.items) |value| {
+        try std.testing.expect(checkTokenTypeMatch(value, .RETURN));
+    }
+}
 
-// pub fn checkTokenTypeMatch(stmt: Ast.Statement, kind: TokenType) bool {
-//     switch (stmt) {
-//         .letStatement => {
-//             return stmt.letStatement.token.tType == kind;
-//         },
-//         .returnStatement => {
-//             return stmt.returnStatement.token.tType == kind;
-//         },
-//         .expression => {
-//             return stmt.expression.token.tType == kind;
-//         },
-//     }
-// }
-// test "TestString" {
-//     const allocator = std.testing.allocator;
-//     const input =
-//         \\ let myvar = anothervar;
-//     ;
-//     var l = Lexer.init(allocator, input);
-//     defer l.deinit();
-//     var parser = Parser.init(allocator, l);
-//     var program = parser.parseProgram();
+pub fn checkTokenTypeMatch(stmt: Ast.Statement, kind: TokenType) bool {
+    switch (stmt) {
+        .letStatement => {
+            return stmt.letStatement.token.tType == kind;
+        },
+        .returnStatement => {
+            return stmt.returnStatement.token.tType == kind;
+        },
+        .expression => {
+            return stmt.expression.token.tType == kind;
+        },
+    }
+}
+test "TestString" {
+    const allocator = std.testing.allocator;
+    const input =
+        \\ let myvar = anothervar;
+    ;
+    var l = Lexer.init(allocator, input);
+    defer l.deinit();
+    var parser = Parser.init(allocator, l);
+    var program = parser.parseProgram();
 
-//     // std.debug.print("\n{any}\n", .{program.statements.items});
+    // std.debug.print("\n{any}\n", .{program.statements.items});
 
-//     program.statements.items[0].letStatement.value = Ast.Expression{ .identifier = Ast.Identifier.init(Token{
-//         .literal = "anothervar",
-//         .tType = .IDENT,
-//     }) };
-//     const stringer = try program.string();
-//     // std.debug.print("\n{s}\n", .{stringer.items});
+    // program.statements.items[0].letStatement.value = Ast.Expression{ .identifier = Ast.Identifier.init(Token{
+    //     .literal = "anothervar",
+    //     .tType = .IDENT,
+    // }) };
+    const stringer = try program.string();
+    // std.debug.print("\n{s}\n", .{stringer.items});
+    defer program.deinit();
+    defer parser.deinit();
+    defer stringer.deinit();
+    // try std.testing.expectEqualSlices(u8, "let myvar = anothervar", stringer.items);
+}
 
-//     try std.testing.expectEqualSlices(u8, "let myvar = anothervar;", stringer.items[0 .. stringer.items.len - 1]);
+test "TestIdentifierExpression" {
+    const allocator = std.testing.allocator;
+    const input =
+        \\ foobar;
+    ;
+    var l = Lexer.init(allocator, input);
+    defer l.deinit();
+    var parser = Parser.init(allocator, l);
+    var program = parser.parseProgram();
+    try std.testing.expect(!parser.checkParserErros());
 
-//     defer program.deinit();
-//     defer parser.deinit();
-//     defer stringer.deinit();
-// }
+    // try Pretty.print(allocator, program.statements.items[0], .{});
 
-// test "TestIdentifierExpression" {
-//     const allocator = std.testing.allocator;
-//     const input =
-//         \\ foobar;
-//     ;
-//     var l = Lexer.init(allocator, input);
-//     defer l.deinit();
-//     var parser = Parser.init(allocator, l);
-//     var program = parser.parseProgram();
-//     try std.testing.expect(!parser.checkParserErros());
+    const stringer = try program.string();
+    defer program.deinit();
+    defer parser.deinit();
+    defer stringer.deinit();
+    try std.testing.expectEqualSlices(u8, "foobar", stringer.items);
+}
 
-//     // try Pretty.print(allocator, program.statements.items[0], .{});
+test "TestIntegerLiteral\n" {
+    const allocator = std.testing.allocator;
+    const input =
+        \\ 5;
+    ;
+    var l = Lexer.init(allocator, input);
+    defer l.deinit();
+    var parser = Parser.init(allocator, l);
+    var program = parser.parseProgram();
+    try std.testing.expect(!parser.checkParserErros());
 
-//     const stringer = try program.string();
+    // try Pretty.print(allocator, program.statements.items[0], .{});
 
-//     try std.testing.expectEqualSlices(u8, "foobar", stringer.items);
-//     defer program.deinit();
-//     defer parser.deinit();
-//     defer stringer.deinit();
-// }
-
-// test "TestIntegerLiteral\n" {
-//     const allocator = std.testing.allocator;
-//     const input =
-//         \\ 5;
-//     ;
-//     var l = Lexer.init(allocator, input);
-//     defer l.deinit();
-//     var parser = Parser.init(allocator, l);
-//     var program = parser.parseProgram();
-//     try std.testing.expect(!parser.checkParserErros());
-
-//     // try Pretty.print(allocator, program.statements.items[0], .{});
-
-//     const stringer = try program.string();
-//     // std.debug.print("{s}\n", .{stringer.items});
-
-//     try std.testing.expectEqualSlices(u8, "5", stringer.items);
-//     defer program.deinit();
-//     defer parser.deinit();
-//     defer stringer.deinit();
-// }
+    const stringer = try program.string();
+    // std.debug.print("{s}\n", .{stringer.items});
+    defer program.deinit();
+    defer parser.deinit();
+    defer stringer.deinit();
+    try std.testing.expectEqualSlices(u8, "5", stringer.items);
+}
 
 // test "TestLetStatements Bad" {
 //     const allocator = std.testing.allocator;
 //     const input =
-//         \\let x = 5;
-//         \\let y x;
-//         \\let x 21321;
+//         \\ let x;
 //     ;
 //     var l = Lexer.init(allocator, input);
 //     defer l.deinit();
-//     var p = Parser.init(allocator, l);
-//     defer p.deinit();
-//     const program = p.parseProgram();
-//     defer program.deinit();
-//     try std.testing.expect(p.checkParserErros());
-//     try std.testing.expectEqual(1, program.statements.list.items.len);
-//     // try Pretty.print(allocator, program, .{});
+//     var parser = Parser.init(allocator, l);
+//     var program = parser.parseProgram();
+//     try std.testing.expect(!parser.checkParserErros());
 
+//     // try Pretty.print(allocator, program.statements.items[0], .{});
+//     defer program.deinit();
+//     defer parser.deinit();
 // }

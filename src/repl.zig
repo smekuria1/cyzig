@@ -20,6 +20,7 @@ pub fn start(allocator: std.mem.Allocator) !void {
             const stringer = try program.string();
             std.debug.print("test out {s}", .{stringer.items});
             var token = lexer.nextToken(lexer.arenaAlloc.allocator());
+            _ = parser.checkParserErros();
             while (token.?.tType != TokenType.EOF) {
                 std.debug.print("{any} -- {s}\n", .{ token.?.tType, token.?.literal });
                 token = lexer.nextToken(lexer.arenaAlloc.allocator());
