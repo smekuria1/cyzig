@@ -3,6 +3,7 @@ const assert = std.debug.assert;
 const Token = @import("./token.zig").Token;
 const TokenType = @import("./token.zig").TokenType;
 const print = std.debug.print;
+const Allocator = std.mem.Allocator;
 
 pub const Node = union(enum) {
     const self = @This();
@@ -99,10 +100,10 @@ pub const Statement = union(enum) {
                         const prefix = self.expression.?.prefixExp;
                         _ = list.writer().write("(") catch unreachable;
                         // print("In ExpStmt before acesss String prefix {any}\n", .{prefix});
-                        std.log.debug("using prefix {any}", .{prefix});
+                        // std.log.debug("using prefix {any}", .{prefix});
                         _ = list.writer().write(prefix.operator) catch unreachable;
                         // print("In ExpStmt after acesss String prefix {any}\n", .{prefix});
-                        std.log.debug("using prefix {any}", .{prefix});
+                        // std.log.debug("using prefix {any}", .{prefix});
                         _ = switch (prefix.right.*) {
                             .identifier => |id| list.writer().write(id.string()) catch unreachable,
                             .integerLiteral => |int| list.writer().write(int.string()) catch unreachable,
@@ -118,7 +119,7 @@ pub const Statement = union(enum) {
                         const infix = self.expression.?.infixExp;
 
                         _ = list.writer().write("(") catch unreachable;
-                        std.log.debug("using infix {any}", .{infix});
+                        // std.log.debug("using infix {any}", .{infix});
                         _ = switch (infix.left.*) {
                             .identifier => |id| list.writer().write(id.string()) catch unreachable,
                             .integerLiteral => |int| list.writer().write(int.string()) catch unreachable,
@@ -227,6 +228,27 @@ pub const Program = struct {
     }
 
     pub fn deinit(self: *Program) void {
+        for (self.statements.items) |value| {
+            switch (value) {
+                .expression => {
+                    print("{any}\n", .{value.expression.expression.?});
+                    const expr = value.expression.expression.?;
+
+                    switch (expr) {
+                        .infixExp => |in| {
+                            self.allocator.destroy(in.left);
+                            self.allocator.destroy(in.right);
+                        },
+                        else => {
+                            continue;
+                        },
+                    }
+                },
+                else => {
+                    break;
+                },
+            }
+        }
         self.statements.deinit();
     }
 

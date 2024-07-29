@@ -6,8 +6,8 @@ const Ast = @import("./ast.zig");
 const Allocator = std.mem.Allocator;
 const Pretty = @import("./pretty.zig");
 const string = []const u8;
-const prefixParseFn = *const fn (self: *Parser) Ast.Expression;
-const infixParseFn = *const fn (slef: *Parser, exp: Ast.Expression) Ast.Expression;
+const prefixParseFn = *const fn (self: *Parser) *Ast.Expression;
+const infixParseFn = *const fn (slef: *Parser, exp: *Ast.Expression) *Ast.Expression;
 const Precedence = enum {
     LOWEST,
     EQUALS,
@@ -146,26 +146,19 @@ pub const Parser = struct {
         return program;
     }
 
-    pub fn parseIdentifier(self: *Parser) Ast.Expression {
-        return Ast.Expression{ .identifier = Ast.Identifier{
-            .token = self.curToken,
-            .value = self.curToken.literal,
-        } };
-    }
-
-    pub fn parseIntegerLiteral(self: *Parser) Ast.Expression {
-        var lit = Ast.IntegerLiteral{
-            .token = self.curToken,
-            .value = undefined,
+    pub fn parseIdentifier(self: *Parser) *Ast.Expression {
+        const exp = self.allocator.create(Ast.Expression) catch unreachable;
+        exp.* = Ast.Expression{
+            .identifier = Ast.Identifier{
+                .token = self.curToken,
+                .value = self.curToken.literal,
+            },
         };
-        const value = std.fmt.parseInt(i64, self.curToken.literal, 10) catch unreachable;
-        errdefer {
-            const msg = std.fmt.allocPrint(self.allocator, "Could not parse {} as integer", .{self.curToken.literal}) catch unreachable;
-            self.errors.append(msg) catch unreachable;
-            lit = null;
-        }
-        lit.value = value;
-        return Ast.Expression{ .integerLiteral = lit };
+        return exp;
+        // return Ast.Expression{ .identifier = Ast.Identifier{
+        //     .token = self.curToken,
+        //     .value = self.curToken.literal,
+        // } };
     }
 
     pub fn parseStatement(self: *Parser) ?Ast.Statement {
@@ -182,7 +175,7 @@ pub const Parser = struct {
             .expression = undefined,
         };
 
-        stmt.expression = self.parseExpression(.LOWEST);
+        stmt.expression = self.parseExpression(.LOWEST).?.*;
         if (self.peekTokenIs(.SEMICOLON)) {
             self.nextToken(self.l.arenaAlloc.allocator());
         }
@@ -195,23 +188,47 @@ pub const Parser = struct {
         self.errors.append(msg) catch unreachable;
     }
 
-    pub fn parseInfixExpression(self: *Parser, left: Ast.Expression) Ast.Expression {
+    pub fn parseIntegerLiteral(self: *Parser) *Ast.Expression {
+        var lit = Ast.IntegerLiteral{
+            .token = self.curToken,
+            .value = undefined,
+        };
+        const value = std.fmt.parseInt(i64, self.curToken.literal, 10) catch unreachable;
+        errdefer {
+            const msg = std.fmt.allocPrint(self.allocator, "Could not parse {} as integer", .{self.curToken.literal}) catch unreachable;
+            self.errors.append(msg) catch unreachable;
+            lit = null;
+        }
+        lit.value = value;
+        const exp = self.allocator.create(Ast.Expression) catch unreachable;
+        exp.* = Ast.Expression{
+            .integerLiteral = lit,
+        };
+        // return Ast.Expression{ .integerLiteral = lit };
+        return exp;
+    }
+
+    pub fn parseInfixExpression(self: *Parser, left: *Ast.Expression) *Ast.Expression {
         var expression = Ast.InfixExpression{
             .token = self.curToken,
             .operator = self.curToken.literal,
-            .left = @constCast(&left),
+            .left = left,
             .right = undefined,
         };
 
         const prec = self.currPrecedence();
         self.nextToken(self.l.arenaAlloc.allocator());
         const right = self.parseExpression(prec).?;
-        expression.right = @constCast(&right);
-
-        return Ast.Expression{ .infixExp = expression };
+        expression.right = right;
+        const exp = self.allocator.create(Ast.Expression) catch unreachable;
+        exp.* = Ast.Expression{
+            .infixExp = expression,
+        };
+        return exp;
+        // return Ast.Expression{ .infixExp = expression };
     }
 
-    pub fn parsePrefixExpression(self: *Parser) Ast.Expression {
+    pub fn parsePrefixExpression(self: *Parser) *Ast.Expression {
         var expression = Ast.PrefixExpression{
             .token = self.curToken,
             .operator = self.curToken.literal,
@@ -219,11 +236,16 @@ pub const Parser = struct {
         };
 
         self.nextToken(self.l.arenaAlloc.allocator());
-        expression.right = @constCast(&self.parseExpression(.LOWEST).?);
+        expression.right = self.parseExpression(.LOWEST).?;
         //  std.debug.print("In ParsePrefixExpression {any}\n", .{expression.tokenLiteral()});
-        return Ast.Expression{
+        //     return Ast.Expression{
+        //         .prefixExp = expression,
+        //     };
+        const exp = self.allocator.create(Ast.Expression) catch unreachable;
+        exp.* = Ast.Expression{
             .prefixExp = expression,
         };
+        return exp;
     }
 
     pub fn printTables(self: *Parser) void {
@@ -240,7 +262,7 @@ pub const Parser = struct {
         }
     }
 
-    pub fn parseExpression(self: *Parser, prec: Precedence) ?Ast.Expression {
+    pub fn parseExpression(self: *Parser, prec: Precedence) ?*Ast.Expression {
         // self.printTables();
         /////////TODO:
         // std.debug.print("{any}\n", .{self.curToken.tType});
@@ -332,7 +354,9 @@ pub const Parser = struct {
     }
 };
 test "TestInfixExpression\n" {
-    const allocator = std.testing.allocator;
+    const Tallocator = std.testing.allocator;
+    var Logallocator = std.heap.LoggingAllocator(.debug, .err).init(Tallocator);
+    const allocator = Logallocator.allocator();
     const input =
         \\5 - 5;
     ;
