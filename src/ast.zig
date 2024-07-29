@@ -81,11 +81,11 @@ pub const Statement = union(enum) {
     pub const ExpressionStatement = struct {
         const Self = @This();
         token: Token,
-        expression: ?Expression,
+        expression: ?*Expression,
 
         pub fn string(self: Self, list: *std.ArrayList(u8)) []const u8 {
             if (self.expression != null) {
-                switch (self.expression.?) {
+                switch (self.expression.?.*) {
                     .identifier => {
                         const tmp = self.expression.?.identifier.string();
                         _ = list.writer().write(tmp) catch unreachable;
@@ -151,6 +151,15 @@ pub const Expression = union(enum) {
     integerLiteral: IntegerLiteral,
     prefixExp: PrefixExpression,
     infixExp: InfixExpression,
+
+    pub fn init(allocator: Allocator) *Expression {
+        const exp = allocator.create(Expression) catch unreachable;
+        return exp;
+    }
+
+    pub fn deinit(self: *Expression, allocator: Allocator) void {
+        allocator.destroy(self);
+    }
 };
 
 pub const PrefixExpression = struct {
@@ -231,18 +240,22 @@ pub const Program = struct {
         for (self.statements.items) |value| {
             switch (value) {
                 .expression => {
-                    print("{any}\n", .{value.expression.expression.?});
                     const expr = value.expression.expression.?;
-
-                    switch (expr) {
+                    switch (expr.*) {
                         .infixExp => |in| {
                             self.allocator.destroy(in.left);
                             self.allocator.destroy(in.right);
                         },
+                        .prefixExp => |pf| {
+                            self.allocator.destroy(pf.right);
+                        },
+                        
                         else => {
                             continue;
                         },
                     }
+
+                    expr.deinit(self.allocator);
                 },
                 else => {
                     break;
