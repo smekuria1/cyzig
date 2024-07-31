@@ -366,7 +366,7 @@ test "TestInfixExpression\n" {
     var Logallocator = std.heap.LoggingAllocator(.debug, .err).init(Tallocator);
     const allocator = Logallocator.allocator();
     const input =
-        \\-a;
+        \\-a + b;
     ;
     var l = Lexer.init(allocator, input);
     defer l.deinit();

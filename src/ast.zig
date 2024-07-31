@@ -97,14 +97,19 @@ pub const Statement = union(enum) {
                         return list.writer().context.items;
                     },
                     .prefixExp => {
-                        print("Main String Prefix", .{});
+                        print("Main String Prefix\n", .{});
                         const prefix = self.expression.?.prefixExp;
                         const prefixString = prefix.string() catch unreachable;
                         _ = list.writer().write(prefixString) catch unreachable;
+                        prefix.allocator.free(prefixString);
                         return "";
                     },
                     .infixExp => {
-                        print("Main String Infix", .{});
+                        print("Main String Infix\n", .{});
+                        const infix = self.expression.?.infixExp;
+                        const infixStrng = infix.string() catch unreachable;
+                        _ = list.writer().write(infixStrng) catch unreachable;
+                        infix.allocator.free(infixStrng);
                         return "";
                     },
                 }
@@ -147,7 +152,11 @@ pub const PrefixExpression = struct {
         _ = switch (self.right.*) {
             .identifier => |id| list.writer().write(id.string()) catch unreachable,
             .integerLiteral => |int| list.writer().write(int.string()) catch unreachable,
-            .infixExp => "",
+            .infixExp => |in| {
+                const infixStrng = in.string() catch unreachable;
+                _ = list.writer().write(infixStrng) catch unreachable;
+                in.allocator.free(infixStrng);
+            },
             else => {
                 _ = list.writer().write(self.tokenLiteral()) catch unreachable;
             },
@@ -171,8 +180,22 @@ pub const InfixExpression = struct {
     }
 
     pub fn string(self: InfixExpression) Allocator.Error![]u8 {
-        _ = self;
-        return "";
+        var list = std.ArrayList(u8).init(self.allocator);
+        _ = list.writer().write("(") catch unreachable;
+        switch (self.left.*) {
+            .identifier => |id| _ = list.writer().write(id.string()) catch unreachable,
+            .integerLiteral => |int| _ = list.writer().write(int.string()) catch unreachable,
+            .prefixExp => |pf| {
+                const prefixStrng = pf.string() catch unreachable;
+                _ = list.writer().write(prefixStrng) catch unreachable;
+                pf.allocator.free(prefixStrng);
+            },
+            else => {
+                _ = list.writer().write(self.tokenLiteral()) catch unreachable;
+            },
+        }
+
+        return list.toOwnedSlice();
     }
 };
 
