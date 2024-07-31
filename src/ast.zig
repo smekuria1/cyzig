@@ -97,47 +97,15 @@ pub const Statement = union(enum) {
                         return list.writer().context.items;
                     },
                     .prefixExp => {
+                        print("Main String Prefix", .{});
                         const prefix = self.expression.?.prefixExp;
-                        _ = list.writer().write("(") catch unreachable;
-                        // print("In ExpStmt before acesss String prefix {any}\n", .{prefix});
-                        // std.log.debug("using prefix {any}", .{prefix});
-                        _ = list.writer().write(prefix.operator) catch unreachable;
-                        // print("In ExpStmt after acesss String prefix {any}\n", .{prefix});
-                        // std.log.debug("using prefix {any}", .{prefix});
-                        _ = switch (prefix.right.*) {
-                            .identifier => |id| list.writer().write(id.string()) catch unreachable,
-                            .integerLiteral => |int| list.writer().write(int.string()) catch unreachable,
-                            else => {
-                                _ = list.writer().write(prefix.tokenLiteral()) catch unreachable;
-                            },
-                        };
-                        _ = list.writer().write(")") catch unreachable;
-
-                        return list.writer().context.items;
+                        const prefixString = prefix.string() catch unreachable;
+                        _ = list.writer().write(prefixString) catch unreachable;
+                        return "";
                     },
                     .infixExp => {
-                        const infix = self.expression.?.infixExp;
-
-                        _ = list.writer().write("(") catch unreachable;
-                        // std.log.debug("using infix {any}", .{infix});
-                        _ = switch (infix.left.*) {
-                            .identifier => |id| list.writer().write(id.string()) catch unreachable,
-                            .integerLiteral => |int| list.writer().write(int.string()) catch unreachable,
-                            else => {
-                                _ = list.writer().write(infix.tokenLiteral()) catch unreachable;
-                            },
-                        };
-                        _ = list.writer().write(infix.operator) catch unreachable;
-                        _ = switch (infix.right.*) {
-                            .identifier => |id| list.writer().write(id.string()) catch unreachable,
-                            .integerLiteral => |int| list.writer().write(int.string()) catch unreachable,
-                            else => {
-                                _ = list.writer().write(infix.tokenLiteral()) catch unreachable;
-                            },
-                        };
-                        _ = list.writer().write(")") catch unreachable;
-
-                        return list.writer().context.items;
+                        print("Main String Infix", .{});
+                        return "";
                     },
                 }
             }
@@ -163,6 +131,7 @@ pub const Expression = union(enum) {
 };
 
 pub const PrefixExpression = struct {
+    allocator: Allocator,
     token: Token,
     operator: []const u8,
     right: *Expression,
@@ -170,9 +139,28 @@ pub const PrefixExpression = struct {
     pub fn tokenLiteral(self: PrefixExpression) []const u8 {
         return self.token.literal;
     }
+
+    pub fn string(self: PrefixExpression) Allocator.Error![]u8 {
+        var list = std.ArrayList(u8).init(self.allocator);
+        _ = list.writer().write("(") catch unreachable;
+        _ = list.writer().write(self.operator) catch unreachable;
+        _ = switch (self.right.*) {
+            .identifier => |id| list.writer().write(id.string()) catch unreachable,
+            .integerLiteral => |int| list.writer().write(int.string()) catch unreachable,
+            .infixExp => "",
+            else => {
+                _ = list.writer().write(self.tokenLiteral()) catch unreachable;
+            },
+        };
+
+        _ = list.writer().write(")") catch unreachable;
+
+        return list.toOwnedSlice();
+    }
 };
 
 pub const InfixExpression = struct {
+    allocator: Allocator,
     token: Token,
     left: *Expression,
     operator: []const u8,
@@ -180,6 +168,11 @@ pub const InfixExpression = struct {
 
     pub fn tokenLiteral(self: InfixExpression) []const u8 {
         return self.token.literal;
+    }
+
+    pub fn string(self: InfixExpression) Allocator.Error![]u8 {
+        _ = self;
+        return "";
     }
 };
 
@@ -245,20 +238,20 @@ pub const Program = struct {
                         .infixExp => |in| {
                             self.allocator.destroy(in.left);
                             self.allocator.destroy(in.right);
+                            expr.deinit(self.allocator);
                         },
                         .prefixExp => |pf| {
                             self.allocator.destroy(pf.right);
+                            expr.deinit(self.allocator);
                         },
-                        
+
                         else => {
-                            continue;
+                            expr.deinit(self.allocator);
                         },
                     }
-
-                    expr.deinit(self.allocator);
                 },
                 else => {
-                    break;
+                    continue;
                 },
             }
         }
