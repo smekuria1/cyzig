@@ -131,7 +131,19 @@ pub const Expression = union(enum) {
     }
 
     pub fn deinit(self: *Expression, allocator: Allocator) void {
-        allocator.destroy(self);
+        switch (self.*) {
+            .infixExp => |infix| {
+                allocator.destroy(infix.right);
+                allocator.destroy(infix.left);
+            },
+            .prefixExp => |prefix| {
+                allocator.destroy(prefix.right);
+            },
+            else => {
+                allocator.destroy(self);
+            },
+        }
+        // allocator.destroy(self);
     }
 };
 
@@ -195,6 +207,23 @@ pub const InfixExpression = struct {
             },
         }
 
+        _ = list.writer().write(self.operator) catch unreachable;
+
+        switch (self.right.*) {
+            .identifier => |id| _ = list.writer().write(id.string()) catch unreachable,
+            .integerLiteral => |int| _ = list.writer().write(int.string()) catch unreachable,
+            .prefixExp => |pf| {
+                const prefixString = pf.string() catch unreachable;
+                _ = list.writer().write(prefixString) catch unreachable;
+                pf.allocator.free(prefixString);
+            },
+            else => {
+                _ = list.writer().write(self.tokenLiteral()) catch unreachable;
+            },
+        }
+
+        _ = list.writer().write(")") catch unreachable;
+
         return list.toOwnedSlice();
     }
 };
@@ -257,21 +286,22 @@ pub const Program = struct {
             switch (value) {
                 .expression => {
                     const expr = value.expression.expression.?;
-                    switch (expr.*) {
-                        .infixExp => |in| {
-                            self.allocator.destroy(in.left);
-                            self.allocator.destroy(in.right);
-                            expr.deinit(self.allocator);
-                        },
-                        .prefixExp => |pf| {
-                            self.allocator.destroy(pf.right);
-                            expr.deinit(self.allocator);
-                        },
+                    expr.deinit(self.allocator);
+                    // switch (expr.*) {
+                    //     .infixExp => |in| {
+                    //         self.allocator.destroy(in.left);
+                    //         self.allocator.destroy(in.right);
+                    //         expr.deinit(self.allocator);
+                    //     },
+                    //     .prefixExp => |pf| {
+                    //         self.allocator.destroy(pf.right);
+                    //         expr.deinit(self.allocator);
+                    //     },
 
-                        else => {
-                            expr.deinit(self.allocator);
-                        },
-                    }
+                    //     else => {
+                    //         expr.deinit(self.allocator);
+                    //     },
+                    // }
                 },
                 else => {
                     continue;
