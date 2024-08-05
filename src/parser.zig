@@ -366,7 +366,7 @@ test "TestInfixExpression\n" {
     var Logallocator = std.heap.LoggingAllocator(.debug, .err).init(Tallocator);
     const allocator = Logallocator.allocator();
     const input =
-        \\a * b * b;
+        \\1 * 2 * b;
     ;
     var l = Lexer.init(allocator, input);
     defer l.deinit();
@@ -385,28 +385,28 @@ test "TestInfixExpression\n" {
     // try std.testing.expectEqualSlices(u8, "(5-5)", stringer.items);
 }
 
-// test "TestPrefixExpression\n" {
-//     // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-//     // const allocator = gpa.allocator();
-//     const allocator = std.testing.allocator;
-//     const input =
-//         \\!20;
-//     ;
-//     var l = Lexer.init(allocator, input);
-//     defer l.deinit();
-//     var parser = Parser.init(allocator, l);
-//     var program = parser.parseProgram();
-//     try std.testing.expect(!parser.checkParserErros());
+test "TestPrefixExpression\n" {
+    // var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    // const allocator = gpa.allocator();
+    const allocator = std.testing.allocator;
+    const input =
+        \\!20;
+    ;
+    var l = Lexer.init(allocator, input);
+    defer l.deinit();
+    var parser = Parser.init(allocator, l);
+    var program = parser.parseProgram();
+    try std.testing.expect(!parser.checkParserErros());
 
-//     // try Pretty.print(allocator, program.statements.items[0], .{});
+    // try Pretty.print(allocator, program.statements.items[0], .{});
 
-//     const stringer = try program.string();
-//     // std.debug.print("Test out {s}\n", .{stringer.items});
-//     defer program.deinit();
-//     defer parser.deinit();
-//     defer stringer.deinit();
-//     try std.testing.expectEqualSlices(u8, "(!20)", stringer.items);
-// }
+    const stringer = try program.string();
+    // std.debug.print("Test out {s}\n", .{stringer.items});
+    defer program.deinit();
+    defer parser.deinit();
+    defer stringer.deinit();
+    try std.testing.expectEqualSlices(u8, "(!20)", stringer.items);
+}
 
 // test "TestLetStatements Good" {
 //     const allocator = std.testing.allocator;

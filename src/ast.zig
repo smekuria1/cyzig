@@ -132,17 +132,22 @@ pub const Expression = union(enum) {
 
     pub fn deinit(self: *Expression, allocator: Allocator) void {
         switch (self.*) {
-            .infixExp => |infix| {
-                infix.deinit();
+            .infixExp => |in| {
+                in.left.deinit(allocator);
+                in.right.deinit(allocator);
+                return allocator.destroy(self);
             },
-            .prefixExp => |prefix| {
-                allocator.destroy(prefix.right);
+            .prefixExp => |pf| {
+                pf.right.deinit(allocator);
+                return allocator.destroy(self);
             },
-            else => {
-                allocator.destroy(self);
+            .identifier => {
+                return allocator.destroy(self);
+            },
+            .integerLiteral => {
+                return allocator.destroy(self);
             },
         }
-        // allocator.destroy(self);
     }
 };
 
@@ -176,9 +181,7 @@ pub const PrefixExpression = struct {
     pub fn string(self: PrefixExpression) Allocator.Error![]u8 {
         var list = std.ArrayList(u8).init(self.allocator);
         _ = list.writer().write("(") catch unreachable;
-        _ = list.writer().write(" ") catch unreachable;
         _ = list.writer().write(self.operator) catch unreachable;
-        _ = list.writer().write(" ") catch unreachable;
         _ = switch (self.right.*) {
             .identifier => |id| list.writer().write(id.string()) catch unreachable,
             .integerLiteral => |int| list.writer().write(int.string()) catch unreachable,
@@ -214,37 +217,37 @@ pub const InfixExpression = struct {
         return self.token.literal;
     }
 
-    pub fn deinit(self: InfixExpression) void {
-        switch (self.left.*) {
-            .infixExp => |infix| {
-                infix.deinit();
-            },
-            .prefixExp => |prefix| {
-                prefix.deinit();
-            },
-            .identifier => |id| {
-                self.allocator.destroy(id);
-            },
-            .integerLiteral => |int| {
-                self.allocator.destroy(int);
-            },
-        }
+    // pub fn deinit(self: InfixExpression) void {
+    //     switch (self.left.*) {
+    //         .infixExp => |infix| {
+    //             infix.deinit();
+    //         },
+    //         .prefixExp => |prefix| {
+    //             prefix.deinit();
+    //         },
+    //         .identifier => |id| {
+    //             self.allocator.destroy(&id);
+    //         },
+    //         .integerLiteral => |int| {
+    //             self.allocator.destroy(&int);
+    //         },
+    //     }
 
-        switch (self.right.*) {
-            .infixExp => |infix| {
-                infix.deinit();
-            },
-            .prefixExp => |prefix| {
-                prefix.deinit();
-            },
-            .identifier => |id| {
-                self.allocator.destroy(id);
-            },
-            .integerLiteral => |int| {
-                self.allocator.destroy(int);
-            },
-        }
-    }
+    //     switch (self.right.*) {
+    //         .infixExp => |infix| {
+    //             infix.deinit();
+    //         },
+    //         .prefixExp => |prefix| {
+    //             prefix.deinit();
+    //         },
+    //         .identifier => |id| {
+    //             self.allocator.destroy(id);
+    //         },
+    //         .integerLiteral => |int| {
+    //             self.allocator.destroy(int);
+    //         },
+    //     }
+    // }
     pub fn string(self: InfixExpression) Allocator.Error![]u8 {
         var list = std.ArrayList(u8).init(self.allocator);
         _ = list.writer().write("(") catch unreachable;
@@ -346,21 +349,6 @@ pub const Program = struct {
                 .expression => {
                     const expr = value.expression.expression.?;
                     expr.deinit(self.allocator);
-                    // switch (expr.*) {
-                    //     .infixExp => |in| {
-                    //         self.allocator.destroy(in.left);
-                    //         self.allocator.destroy(in.right);
-                    //         expr.deinit(self.allocator);
-                    //     },
-                    //     .prefixExp => |pf| {
-                    //         self.allocator.destroy(pf.right);
-                    //         expr.deinit(self.allocator);
-                    //     },
-
-                    //     else => {
-                    //         expr.deinit(self.allocator);
-                    //     },
-                    // }
                 },
                 else => {
                     continue;
