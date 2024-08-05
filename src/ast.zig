@@ -133,8 +133,7 @@ pub const Expression = union(enum) {
     pub fn deinit(self: *Expression, allocator: Allocator) void {
         switch (self.*) {
             .infixExp => |infix| {
-                allocator.destroy(infix.right);
-                allocator.destroy(infix.left);
+                infix.deinit();
             },
             .prefixExp => |prefix| {
                 allocator.destroy(prefix.right);
@@ -157,10 +156,29 @@ pub const PrefixExpression = struct {
         return self.token.literal;
     }
 
+    pub fn deinit(self: PrefixExpression) void {
+        switch (self.right.*) {
+            .infixExp => |infix| {
+                infix.deinit();
+            },
+            .prefixExp => |prefix| {
+                prefix.deinit();
+            },
+            .identifier => |id| {
+                self.allocator.destroy(id);
+            },
+            .integerLiteral => |int| {
+                self.allocator.destroy(int);
+            },
+        }
+    }
+
     pub fn string(self: PrefixExpression) Allocator.Error![]u8 {
         var list = std.ArrayList(u8).init(self.allocator);
         _ = list.writer().write("(") catch unreachable;
+        _ = list.writer().write(" ") catch unreachable;
         _ = list.writer().write(self.operator) catch unreachable;
+        _ = list.writer().write(" ") catch unreachable;
         _ = switch (self.right.*) {
             .identifier => |id| list.writer().write(id.string()) catch unreachable,
             .integerLiteral => |int| list.writer().write(int.string()) catch unreachable,
@@ -169,9 +187,14 @@ pub const PrefixExpression = struct {
                 _ = list.writer().write(infixStrng) catch unreachable;
                 in.allocator.free(infixStrng);
             },
-            else => {
-                _ = list.writer().write(self.tokenLiteral()) catch unreachable;
+            .prefixExp => |pf| {
+                const prefixStrng = pf.string() catch unreachable;
+                _ = list.writer().write(prefixStrng) catch unreachable;
+                pf.allocator.free(prefixStrng);
             },
+            // else => {
+            //     _ = list.writer().write(self.tokenLiteral()) catch unreachable;
+            // },
         };
 
         _ = list.writer().write(")") catch unreachable;
@@ -191,6 +214,37 @@ pub const InfixExpression = struct {
         return self.token.literal;
     }
 
+    pub fn deinit(self: InfixExpression) void {
+        switch (self.left.*) {
+            .infixExp => |infix| {
+                infix.deinit();
+            },
+            .prefixExp => |prefix| {
+                prefix.deinit();
+            },
+            .identifier => |id| {
+                self.allocator.destroy(id);
+            },
+            .integerLiteral => |int| {
+                self.allocator.destroy(int);
+            },
+        }
+
+        switch (self.right.*) {
+            .infixExp => |infix| {
+                infix.deinit();
+            },
+            .prefixExp => |prefix| {
+                prefix.deinit();
+            },
+            .identifier => |id| {
+                self.allocator.destroy(id);
+            },
+            .integerLiteral => |int| {
+                self.allocator.destroy(int);
+            },
+        }
+    }
     pub fn string(self: InfixExpression) Allocator.Error![]u8 {
         var list = std.ArrayList(u8).init(self.allocator);
         _ = list.writer().write("(") catch unreachable;
@@ -202,13 +256,18 @@ pub const InfixExpression = struct {
                 _ = list.writer().write(prefixStrng) catch unreachable;
                 pf.allocator.free(prefixStrng);
             },
-            else => {
-                _ = list.writer().write(self.tokenLiteral()) catch unreachable;
+            .infixExp => |in| {
+                const infixStrng = in.string() catch unreachable;
+                _ = list.writer().write(infixStrng) catch unreachable;
+                in.allocator.free(infixStrng);
             },
+            // else => {
+            //     _ = list.writer().write(self.tokenLiteral()) catch unreachable;
+            // },
         }
-
+        _ = list.writer().write(" ") catch unreachable;
         _ = list.writer().write(self.operator) catch unreachable;
-
+        _ = list.writer().write(" ") catch unreachable;
         switch (self.right.*) {
             .identifier => |id| _ = list.writer().write(id.string()) catch unreachable,
             .integerLiteral => |int| _ = list.writer().write(int.string()) catch unreachable,
