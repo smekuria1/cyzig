@@ -110,6 +110,11 @@ pub const Statement = union(enum) {
                         infix.allocator.free(infixStrng);
                         return "";
                     },
+                    .boolean => {
+                        const tmp = self.expression.?.boolean.string();
+                        _ = list.writer().write(tmp) catch unreachable;
+                        return list.writer().context.items;
+                    },
                 }
             }
             return "";
@@ -122,6 +127,7 @@ pub const Expression = union(enum) {
     integerLiteral: IntegerLiteral,
     prefixExp: PrefixExpression,
     infixExp: InfixExpression,
+    boolean: Boolean,
 
     pub fn init(allocator: Allocator) *Expression {
         const exp = allocator.create(Expression) catch unreachable;
@@ -143,6 +149,9 @@ pub const Expression = union(enum) {
                 return allocator.destroy(self);
             },
             .integerLiteral => {
+                return allocator.destroy(self);
+            },
+            .boolean => {
                 return allocator.destroy(self);
             },
         }
@@ -193,9 +202,9 @@ pub const PrefixExpression = struct {
                 _ = list.writer().write(prefixStrng) catch unreachable;
                 pf.allocator.free(prefixStrng);
             },
-            // else => {
-            //     _ = list.writer().write(self.tokenLiteral()) catch unreachable;
-            // },
+            else => {
+                _ = list.writer().write(self.tokenLiteral()) catch unreachable;
+            },
         };
 
         _ = list.writer().write(")") catch unreachable;
@@ -262,9 +271,9 @@ pub const InfixExpression = struct {
                 _ = list.writer().write(infixStrng) catch unreachable;
                 in.allocator.free(infixStrng);
             },
-            // else => {
-            //     _ = list.writer().write(self.tokenLiteral()) catch unreachable;
-            // },
+            else => {
+                _ = list.writer().write(self.tokenLiteral()) catch unreachable;
+            },
         }
         _ = list.writer().write(" ") catch unreachable;
         _ = list.writer().write(self.operator) catch unreachable;
@@ -281,6 +290,9 @@ pub const InfixExpression = struct {
                 const infixStrng = in.string() catch unreachable;
                 _ = list.writer().write(infixStrng) catch unreachable;
                 in.allocator.free(infixStrng);
+            },
+            else => {
+                _ = list.writer().write(self.tokenLiteral()) catch unreachable;
             },
         }
 
@@ -329,6 +341,18 @@ pub const Identifier = struct {
     pub fn string(self: Identifier) []const u8 {
         // print("In identifier String {}\n", .{self});
         return self.value;
+    }
+};
+pub const Boolean = struct {
+    token: Token,
+    value: bool,
+
+    pub fn tokenLiteral(self: Boolean) []const u8 {
+        return self.token.literal;
+    }
+
+    pub fn string(self: Boolean) []const u8 {
+        return self.token.literal;
     }
 };
 
