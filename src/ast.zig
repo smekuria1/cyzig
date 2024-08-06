@@ -97,7 +97,6 @@ pub const Statement = union(enum) {
                         return list.writer().context.items;
                     },
                     .prefixExp => {
-                        print("Main String Prefix\n", .{});
                         const prefix = self.expression.?.prefixExp;
                         const prefixString = prefix.string() catch unreachable;
                         _ = list.writer().write(prefixString) catch unreachable;
@@ -105,7 +104,6 @@ pub const Statement = union(enum) {
                         return "";
                     },
                     .infixExp => {
-                        print("Main String Infix\n", .{});
                         const infix = self.expression.?.infixExp;
                         const infixStrng = infix.string() catch unreachable;
                         _ = list.writer().write(infixStrng) catch unreachable;
@@ -279,8 +277,10 @@ pub const InfixExpression = struct {
                 _ = list.writer().write(prefixString) catch unreachable;
                 pf.allocator.free(prefixString);
             },
-            else => {
-                _ = list.writer().write(self.tokenLiteral()) catch unreachable;
+            .infixExp => |in| {
+                const infixStrng = in.string() catch unreachable;
+                _ = list.writer().write(infixStrng) catch unreachable;
+                in.allocator.free(infixStrng);
             },
         }
 

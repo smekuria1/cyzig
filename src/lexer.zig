@@ -65,7 +65,6 @@ pub const Lexer = struct {
                 };
             },
             .EQ => {
-                std.debug.print("In EQ {any}\n", .{ch});
                 var lit = allocator.alloc(u8, 2) catch unreachable;
                 lit[0] = ch;
                 lit[1] = ch;

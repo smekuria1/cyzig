@@ -362,11 +362,9 @@ pub const Parser = struct {
 test "TestOperatorPrecedenceParsing" {}
 
 test "TestInfixExpression\n" {
-    const Tallocator = std.testing.allocator;
-    var Logallocator = std.heap.LoggingAllocator(.debug, .err).init(Tallocator);
-    const allocator = Logallocator.allocator();
+    const allocator = std.testing.allocator;
     const input =
-        \\1 * 2 * b;
+        \\5 > 4 == 3 < 4;
     ;
     var l = Lexer.init(allocator, input);
     defer l.deinit();
@@ -379,10 +377,11 @@ test "TestInfixExpression\n" {
     // try Pretty.print(allocator, program.statements.items[0], .{});
 
     const stringer = try program.string();
-    std.debug.print("Test out {s}\n", .{stringer.items});
+    // try Pretty.print(allocator, program.statements.items[0], .{ .max_depth = 30 });
+    // std.debug.print("Test out {s}\n", .{stringer.items});
 
     defer stringer.deinit();
-    // try std.testing.expectEqualSlices(u8, "(5-5)", stringer.items);
+    try std.testing.expectEqualSlices(u8, "((5 > 4) == (3 < 4))", stringer.items);
 }
 
 test "TestPrefixExpression\n" {
@@ -408,142 +407,142 @@ test "TestPrefixExpression\n" {
     try std.testing.expectEqualSlices(u8, "(!20)", stringer.items);
 }
 
-// test "TestLetStatements Good" {
-//     const allocator = std.testing.allocator;
-//     const input =
-//         \\let x = 5;
-//         \\let y = x;
-//         \\let foobar = 21321;
-//     ;
-//     var l = Lexer.init(allocator, input);
-//     defer l.deinit();
-//     var parser = Parser.init(allocator, l);
-//     var program = parser.parseProgram();
-//     defer program.deinit();
-//     defer parser.deinit();
-//     //  try std.testing.expect(parser.checkParserErros());
+test "TestLetStatements Good" {
+    const allocator = std.testing.allocator;
+    const input =
+        \\let x = 5;
+        \\let y = x;
+        \\let foobar = 21321;
+    ;
+    var l = Lexer.init(allocator, input);
+    defer l.deinit();
+    var parser = Parser.init(allocator, l);
+    var program = parser.parseProgram();
+    defer program.deinit();
+    defer parser.deinit();
+    //  try std.testing.expect(parser.checkParserErros());
 
-//     const expected_idents = [_]Ast.Identifier{
-//         Ast.Identifier.init(Token{ .tType = .IDENT, .literal = "x" }),
-//         Ast.Identifier.init(Token{ .tType = .IDENT, .literal = "y" }),
-//         Ast.Identifier.init(Token{ .tType = .IDENT, .literal = "foobar" }),
-//     };
+    const expected_idents = [_]Ast.Identifier{
+        Ast.Identifier.init(Token{ .tType = .IDENT, .literal = "x" }),
+        Ast.Identifier.init(Token{ .tType = .IDENT, .literal = "y" }),
+        Ast.Identifier.init(Token{ .tType = .IDENT, .literal = "foobar" }),
+    };
 
-//     for (expected_idents, 0..) |ident, i| {
-//         const statement = program.statements.items[i];
-//         const ls = statement.letStatement;
-//         const literal = ls.name.tokenLiteral();
+    for (expected_idents, 0..) |ident, i| {
+        const statement = program.statements.items[i];
+        const ls = statement.letStatement;
+        const literal = ls.name.tokenLiteral();
 
-//         // std.debug.print("\n ====== \n statements: {any}\n ", .{statement});
-//         try std.testing.expect(ls.token.tType == .LET);
+        // std.debug.print("\n ====== \n statements: {any}\n ", .{statement});
+        try std.testing.expect(ls.token.tType == .LET);
 
-//         // Compare token literal
-//         std.testing.expect(std.mem.eql(u8, ident.value, literal)) catch {
-//             std.debug.print("Expected: {s}, got: {s}\n", .{ ident.value, literal });
-//             return error.literalmismatch;
-//         };
-//     }
-// }
+        // Compare token literal
+        std.testing.expect(std.mem.eql(u8, ident.value, literal)) catch {
+            std.debug.print("Expected: {s}, got: {s}\n", .{ ident.value, literal });
+            return error.literalmismatch;
+        };
+    }
+}
 
-// test "Test ReturnStatement" {
-//     const allocator = std.testing.allocator;
-//     const input =
-//         \\return 5;
-//         \\return x;
-//         \\return y + x;
-//     ;
-//     var l = Lexer.init(allocator, input);
-//     defer l.deinit();
-//     var parser = Parser.init(allocator, l);
-//     var program = parser.parseProgram();
-//     defer program.deinit();
-//     defer parser.deinit();
-//     // try Pretty.print(allocator, program, .{});
-//     try std.testing.expect(!parser.checkParserErros());
-//     try std.testing.expectEqualDeep(3, program.statements.items.len);
+test "Test ReturnStatement" {
+    const allocator = std.testing.allocator;
+    const input =
+        \\return 5;
+        \\return x;
+        \\return y + x;
+    ;
+    var l = Lexer.init(allocator, input);
+    defer l.deinit();
+    var parser = Parser.init(allocator, l);
+    var program = parser.parseProgram();
+    defer program.deinit();
+    defer parser.deinit();
+    // try Pretty.print(allocator, program, .{});
+    try std.testing.expect(!parser.checkParserErros());
+    try std.testing.expectEqualDeep(3, program.statements.items.len);
 
-//     for (program.statements.items) |value| {
-//         try std.testing.expect(checkTokenTypeMatch(value, .RETURN));
-//     }
-// }
+    for (program.statements.items) |value| {
+        try std.testing.expect(checkTokenTypeMatch(value, .RETURN));
+    }
+}
 
-// pub fn checkTokenTypeMatch(stmt: Ast.Statement, kind: TokenType) bool {
-//     switch (stmt) {
-//         .letStatement => {
-//             return stmt.letStatement.token.tType == kind;
-//         },
-//         .returnStatement => {
-//             return stmt.returnStatement.token.tType == kind;
-//         },
-//         .expression => {
-//             return stmt.expression.token.tType == kind;
-//         },
-//     }
-// }
-// test "TestString" {
-//     const allocator = std.testing.allocator;
-//     const input =
-//         \\ let myvar = anothervar;
-//     ;
-//     var l = Lexer.init(allocator, input);
-//     defer l.deinit();
-//     var parser = Parser.init(allocator, l);
-//     var program = parser.parseProgram();
+pub fn checkTokenTypeMatch(stmt: Ast.Statement, kind: TokenType) bool {
+    switch (stmt) {
+        .letStatement => {
+            return stmt.letStatement.token.tType == kind;
+        },
+        .returnStatement => {
+            return stmt.returnStatement.token.tType == kind;
+        },
+        .expression => {
+            return stmt.expression.token.tType == kind;
+        },
+    }
+}
+test "TestString" {
+    const allocator = std.testing.allocator;
+    const input =
+        \\ let myvar = anothervar;
+    ;
+    var l = Lexer.init(allocator, input);
+    defer l.deinit();
+    var parser = Parser.init(allocator, l);
+    var program = parser.parseProgram();
 
-//     // std.debug.print("\n{any}\n", .{program.statements.items});
+    // std.debug.print("\n{any}\n", .{program.statements.items});
 
-//     // program.statements.items[0].letStatement.value = Ast.Expression{ .identifier = Ast.Identifier.init(Token{
-//     //     .literal = "anothervar",
-//     //     .tType = .IDENT,
-//     // }) };
-//     const stringer = try program.string();
-//     // std.debug.print("\n{s}\n", .{stringer.items});
-//     defer program.deinit();
-//     defer parser.deinit();
-//     defer stringer.deinit();
-//     // try std.testing.expectEqualSlices(u8, "let myvar = anothervar", stringer.items);
-// }
+    // program.statements.items[0].letStatement.value = Ast.Expression{ .identifier = Ast.Identifier.init(Token{
+    //     .literal = "anothervar",
+    //     .tType = .IDENT,
+    // }) };
+    const stringer = try program.string();
+    // std.debug.print("\n{s}\n", .{stringer.items});
+    defer program.deinit();
+    defer parser.deinit();
+    defer stringer.deinit();
+    // try std.testing.expectEqualSlices(u8, "let myvar = anothervar", stringer.items);
+}
 
-// test "TestIdentifierExpression" {
-//     const allocator = std.testing.allocator;
-//     const input =
-//         \\ foobar;
-//     ;
-//     var l = Lexer.init(allocator, input);
-//     defer l.deinit();
-//     var parser = Parser.init(allocator, l);
-//     var program = parser.parseProgram();
-//     try std.testing.expect(!parser.checkParserErros());
+test "TestIdentifierExpression" {
+    const allocator = std.testing.allocator;
+    const input =
+        \\ foobar;
+    ;
+    var l = Lexer.init(allocator, input);
+    defer l.deinit();
+    var parser = Parser.init(allocator, l);
+    var program = parser.parseProgram();
+    try std.testing.expect(!parser.checkParserErros());
 
-//     // try Pretty.print(allocator, program.statements.items[0], .{});
+    // try Pretty.print(allocator, program.statements.items[0], .{});
 
-//     const stringer = try program.string();
-//     defer program.deinit();
-//     defer parser.deinit();
-//     defer stringer.deinit();
-//     try std.testing.expectEqualSlices(u8, "foobar", stringer.items);
-// }
+    const stringer = try program.string();
+    defer program.deinit();
+    defer parser.deinit();
+    defer stringer.deinit();
+    try std.testing.expectEqualSlices(u8, "foobar", stringer.items);
+}
 
-// test "TestIntegerLiteral\n" {
-//     const allocator = std.testing.allocator;
-//     const input =
-//         \\ 5;
-//     ;
-//     var l = Lexer.init(allocator, input);
-//     defer l.deinit();
-//     var parser = Parser.init(allocator, l);
-//     var program = parser.parseProgram();
-//     try std.testing.expect(!parser.checkParserErros());
+test "TestIntegerLiteral\n" {
+    const allocator = std.testing.allocator;
+    const input =
+        \\ 5;
+    ;
+    var l = Lexer.init(allocator, input);
+    defer l.deinit();
+    var parser = Parser.init(allocator, l);
+    var program = parser.parseProgram();
+    try std.testing.expect(!parser.checkParserErros());
 
-//     // try Pretty.print(allocator, program.statements.items[0], .{});
+    // try Pretty.print(allocator, program.statements.items[0], .{});
 
-//     const stringer = try program.string();
-//     // std.debug.print("{s}\n", .{stringer.items});
-//     defer program.deinit();
-//     defer parser.deinit();
-//     defer stringer.deinit();
-//     try std.testing.expectEqualSlices(u8, "5", stringer.items);
-// }
+    const stringer = try program.string();
+    // std.debug.print("{s}\n", .{stringer.items});
+    defer program.deinit();
+    defer parser.deinit();
+    defer stringer.deinit();
+    try std.testing.expectEqualSlices(u8, "5", stringer.items);
+}
 
 // test "TestLetStatements Bad" {
 //     const allocator = std.testing.allocator;
