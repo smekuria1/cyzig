@@ -6,8 +6,8 @@ const Ast = @import("./ast.zig");
 const Allocator = std.mem.Allocator;
 const Pretty = @import("./pretty.zig");
 const string = []const u8;
-const prefixParseFn = *const fn (self: *Parser) *Ast.Expression;
-const infixParseFn = *const fn (slef: *Parser, exp: *Ast.Expression) *Ast.Expression;
+const prefixParseFn = *const fn (self: *Parser) ?*Ast.Expression;
+const infixParseFn = *const fn (slef: *Parser, exp: *Ast.Expression) ?*Ast.Expression;
 const Precedence = enum {
     LOWEST,
     EQUALS,
@@ -54,6 +54,7 @@ pub const Parser = struct {
         parser.registerPrefix(.MINUS, parsePrefixExpression) catch unreachable;
         parser.registerPrefix(.TRUE, parseBoolean) catch unreachable;
         parser.registerPrefix(.FALSE, parseBoolean) catch unreachable;
+        parser.registerPrefix(.LPAREN, parseGroupedExpressions) catch unreachable;
 
         parser.infixParseFns = Ast.GenericAst(infixParseFn).init(allocator) catch unreachable;
         parser.registerInfix(.PLUS, parseInfixExpression) catch unreachable;
@@ -148,7 +149,7 @@ pub const Parser = struct {
         return program;
     }
 
-    pub fn parseIdentifier(self: *Parser) *Ast.Expression {
+    pub fn parseIdentifier(self: *Parser) ?*Ast.Expression {
         const exp = Ast.Expression.init(self.allocator);
         exp.* = Ast.Expression{
             .identifier = Ast.Identifier{
@@ -183,8 +184,13 @@ pub const Parser = struct {
             .token = self.curToken,
             .expression = undefined,
         };
+        const exp = self.parseExpression(.LOWEST);
+        if (exp) |expression| {
+            stmt.expression = expression;
+        } else {
+            stmt.expression = null;
+        }
 
-        stmt.expression = self.parseExpression(.LOWEST).?;
         if (self.peekTokenIs(.SEMICOLON)) {
             self.nextToken(self.l.arenaAlloc.allocator());
         }
@@ -197,7 +203,7 @@ pub const Parser = struct {
         self.errors.append(msg) catch unreachable;
     }
 
-    pub fn parseIntegerLiteral(self: *Parser) *Ast.Expression {
+    pub fn parseIntegerLiteral(self: *Parser) ?*Ast.Expression {
         var lit = Ast.IntegerLiteral{
             .token = self.curToken,
             .value = undefined,
@@ -218,7 +224,7 @@ pub const Parser = struct {
         return exp;
     }
 
-    pub fn parseInfixExpression(self: *Parser, left: *Ast.Expression) *Ast.Expression {
+    pub fn parseInfixExpression(self: *Parser, left: *Ast.Expression) ?*Ast.Expression {
         var expression = Ast.InfixExpression{
             .token = self.curToken,
             .allocator = self.allocator,
@@ -239,7 +245,7 @@ pub const Parser = struct {
         return exp;
     }
 
-    pub fn parsePrefixExpression(self: *Parser) *Ast.Expression {
+    pub fn parsePrefixExpression(self: *Parser) ?*Ast.Expression {
         var expression = Ast.PrefixExpression{
             .token = self.curToken,
             .allocator = self.allocator,
@@ -254,6 +260,22 @@ pub const Parser = struct {
             .prefixExp = expression,
         };
         return exp;
+    }
+
+    pub fn parseGroupedExpressions(self: *Parser) ?*Ast.Expression {
+        self.nextToken(self.l.arenaAlloc.allocator());
+
+        const exp = self.parseExpression(.LOWEST);
+
+        if (!self.expectPeek(.RPAREN)) {
+            return null;
+        }
+        if (exp) |expression| {
+            //
+            return expression;
+        }
+
+        return null;
     }
 
     pub fn printTables(self: *Parser) void {
@@ -271,7 +293,7 @@ pub const Parser = struct {
     }
 
     pub fn parseExpression(self: *Parser, prec: Precedence) ?*Ast.Expression {
-        self.printTables();
+        // self.printTables();
         /////////TODO:
         // std.debug.print("{any}\n", .{self.curToken.tType});
         // std.debug.print("\nParse Funtion {any}\n", .{self.prefixParseFns.list[6]});
@@ -282,7 +304,7 @@ pub const Parser = struct {
         }
         const prefix = self.prefixParseFns.list[@intFromEnum(self.curToken.tType)];
 
-        var leftexp = prefix(self);
+        var leftexp = prefix(self).?;
 
         while (!self.peekTokenIs(.SEMICOLON) and @intFromEnum(prec) < @intFromEnum(self.peekPrecedence())) {
             const inExists = self.infixParseFns.filled.get(@intFromEnum(self.peekToken.tType));
@@ -293,7 +315,7 @@ pub const Parser = struct {
 
             self.nextToken(self.l.arenaAlloc.allocator());
 
-            leftexp = infix(self, leftexp);
+            leftexp = infix(self, leftexp).?;
         }
         // std.debug.print("In Parse Expression {s}\n", .{leftexp.identifier.string()});
         return leftexp;
@@ -364,6 +386,29 @@ pub const Parser = struct {
 
 test "TestOperatorPrecedenceParsing" {}
 
+test "TestGroupedExpression" {
+    const allocator = std.testing.allocator;
+    const input =
+        \\(5 + 5) * 2;
+        \\!(true == true)
+    ;
+    var l = Lexer.init(allocator, input);
+    defer l.deinit();
+    var parser = Parser.init(allocator, l);
+    var program = parser.parseProgram();
+    defer program.deinit();
+    defer parser.deinit();
+    try std.testing.expect(!parser.checkParserErros());
+
+    // try Pretty.print(allocator, program.statements.items[0], .{});
+
+    const stringer = try program.string();
+    // try Pretty.print(allocator, program.statements.items[0], .{ .max_depth = 30 });
+    std.debug.print("Test out {s}\n", .{stringer.items});
+
+    defer stringer.deinit();
+    // try std.testing.expectEqualSlices(u8, "(5 + 4)", stringer.items);
+}
 test "TestBoolean" {
     const allocator = std.testing.allocator;
     const input =

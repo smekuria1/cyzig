@@ -168,23 +168,6 @@ pub const PrefixExpression = struct {
         return self.token.literal;
     }
 
-    pub fn deinit(self: PrefixExpression) void {
-        switch (self.right.*) {
-            .infixExp => |infix| {
-                infix.deinit();
-            },
-            .prefixExp => |prefix| {
-                prefix.deinit();
-            },
-            .identifier => |id| {
-                self.allocator.destroy(id);
-            },
-            .integerLiteral => |int| {
-                self.allocator.destroy(int);
-            },
-        }
-    }
-
     pub fn string(self: PrefixExpression) Allocator.Error![]u8 {
         var list = std.ArrayList(u8).init(self.allocator);
         _ = list.writer().write("(") catch unreachable;
@@ -202,9 +185,7 @@ pub const PrefixExpression = struct {
                 _ = list.writer().write(prefixStrng) catch unreachable;
                 pf.allocator.free(prefixStrng);
             },
-            else => {
-                _ = list.writer().write(self.tokenLiteral()) catch unreachable;
-            },
+            .boolean => |boo| list.writer().write(boo.string()) catch unreachable,
         };
 
         _ = list.writer().write(")") catch unreachable;
@@ -224,37 +205,6 @@ pub const InfixExpression = struct {
         return self.token.literal;
     }
 
-    // pub fn deinit(self: InfixExpression) void {
-    //     switch (self.left.*) {
-    //         .infixExp => |infix| {
-    //             infix.deinit();
-    //         },
-    //         .prefixExp => |prefix| {
-    //             prefix.deinit();
-    //         },
-    //         .identifier => |id| {
-    //             self.allocator.destroy(&id);
-    //         },
-    //         .integerLiteral => |int| {
-    //             self.allocator.destroy(&int);
-    //         },
-    //     }
-
-    //     switch (self.right.*) {
-    //         .infixExp => |infix| {
-    //             infix.deinit();
-    //         },
-    //         .prefixExp => |prefix| {
-    //             prefix.deinit();
-    //         },
-    //         .identifier => |id| {
-    //             self.allocator.destroy(id);
-    //         },
-    //         .integerLiteral => |int| {
-    //             self.allocator.destroy(int);
-    //         },
-    //     }
-    // }
     pub fn string(self: InfixExpression) Allocator.Error![]u8 {
         var list = std.ArrayList(u8).init(self.allocator);
         _ = list.writer().write("(") catch unreachable;
@@ -271,9 +221,7 @@ pub const InfixExpression = struct {
                 _ = list.writer().write(infixStrng) catch unreachable;
                 in.allocator.free(infixStrng);
             },
-            else => {
-                _ = list.writer().write(self.tokenLiteral()) catch unreachable;
-            },
+            .boolean => |boo| _ = list.writer().write(boo.string()) catch unreachable,
         }
         _ = list.writer().write(" ") catch unreachable;
         _ = list.writer().write(self.operator) catch unreachable;
@@ -291,14 +239,29 @@ pub const InfixExpression = struct {
                 _ = list.writer().write(infixStrng) catch unreachable;
                 in.allocator.free(infixStrng);
             },
-            else => {
-                _ = list.writer().write(self.tokenLiteral()) catch unreachable;
-            },
+            .boolean => |boo| _ = list.writer().write(boo.string()) catch unreachable,
         }
 
         _ = list.writer().write(")") catch unreachable;
 
         return list.toOwnedSlice();
+    }
+};
+
+pub const IfExpression = struct {
+    allocator: Allocator,
+    token: Token,
+    condition: *Expression,
+    consequence: *BlockStatement,
+    alternative: *BlockStatement,
+};
+
+pub const BlockStatement = struct {
+    token: Token,
+    statements: []Statement,
+
+    pub fn tokenLiteral(self: BlockStatement) []const u8 {
+        return self.token.literal;
     }
 };
 
@@ -371,8 +334,10 @@ pub const Program = struct {
         for (self.statements.items) |value| {
             switch (value) {
                 .expression => {
-                    const expr = value.expression.expression.?;
-                    expr.deinit(self.allocator);
+                    const expr = value.expression.expression;
+                    if (expr) |expression| {
+                        expression.deinit(self.allocator);
+                    }
                 },
                 else => {
                     continue;
