@@ -169,14 +169,20 @@ pub const Expression = union(enum) {
                             .expression => |exp| {
                                 exp.expression.?.deinit(allocator);
                             },
-                            else => {
-                                //TODO: Stopped here 8/8 fix deiniting
-                            },
+                            else => {},
                         }
                     }
                     con.statements.deinit();
                 }
                 if (ifexpr.alternative) |alt| {
+                    for (alt.statements.items) |value| {
+                        switch (value) {
+                            .expression => |exp| {
+                                exp.expression.?.deinit(allocator);
+                            },
+                            else => {},
+                        }
+                    }
                     alt.statements.deinit();
                 }
                 ifexpr.condition.deinit(allocator);
@@ -350,6 +356,39 @@ pub const IfExpression = struct {
             _ = list.writer().write(altString) catch unreachable;
             self.allocator.free(altString);
         }
+
+        return list.toOwnedSlice();
+    }
+};
+
+pub const FunctionLiteral = struct {
+    allocator: Allocator,
+    token: Token,
+    parameters: std.ArrayList(Identifier),
+    body: ?BlockStatement,
+
+    pub fn tokenLiteral(self: FunctionLiteral) []const u8 {
+        return self.token.literal;
+    }
+
+    pub fn string(self: FunctionLiteral) Allocator![]u8 {
+        var list = std.ArrayList(u8).init(self.allocator);
+        var params: [1024]u8 = undefined;
+        assert(self.parameters.items.len <= 1024);
+        for (0.., self.parameters.items) |i, value| {
+            params[i] = value.string();
+        }
+        // params[self.parameters.items.len + 1] = "-";
+
+        _ = list.writer().write(self.tokenLiteral()) catch unreachable;
+        _ = list.writer().write("(") catch unreachable;
+        //TODO: add comma separator
+        _ = list.writer().write(params[0..self.parameters.items.len]) catch unreachable;
+        _ = list.writer().write(")") catch unreachable;
+
+        const bodystring = self.body.?.string() catch unreachable;
+        _ = list.writer().write(bodystring) catch unreachable;
+        self.allocator.free(bodystring);
 
         return list.toOwnedSlice();
     }

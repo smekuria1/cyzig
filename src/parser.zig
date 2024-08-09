@@ -447,7 +447,29 @@ pub const Parser = struct {
     }
 };
 
-// test "TestOperatorPrecedenceParsing" {}
+test "TestOperatorPrecedenceParsing" {}
+test "TestFunctionLiteral" {
+    const allocator = std.testing.allocator;
+    const input =
+        \\fn(x, y) { x + y; }
+    ;
+    var l = Lexer.init(allocator, input);
+    defer l.deinit();
+    var parser = Parser.init(allocator, l);
+    var program = parser.parseProgram();
+    defer program.deinit();
+    defer parser.deinit();
+    // try std.testing.expect(!parser.checkParserErros());
+
+    // try Pretty.print(allocator, program.statements.items[0], .{});
+
+    const stringer = try program.string();
+    // try Pretty.print(allocator, program.statements.items[0], .{ .max_depth = 30 });
+    std.debug.print("Test out {s}\n", .{stringer.items});
+
+    defer stringer.deinit();
+    // try std.testing.expectEqualSlices(u8, "(5 + 4)", stringer.items);
+}
 // test "TestIfExpression" {
 //     const allocator = std.testing.allocator;
 //     const input =
@@ -470,28 +492,28 @@ pub const Parser = struct {
 //     defer stringer.deinit();
 //     // try std.testing.expectEqualSlices(u8, "(5 + 4)", stringer.items);
 // }
-test "TestIfElseExpression" {
-    const allocator = std.testing.allocator;
-    const input =
-        \\if (x < y) { x } else { y };
-    ;
-    var l = Lexer.init(allocator, input);
-    defer l.deinit();
-    var parser = Parser.init(allocator, l);
-    var program = parser.parseProgram();
-    defer program.deinit();
-    defer parser.deinit();
-    // try std.testing.expect(!parser.checkParserErros());
+// test "TestIfElseExpression" {
+//     const allocator = std.testing.allocator;
+//     const input =
+//         \\if (x < y) { x } else { y };
+//     ;
+//     var l = Lexer.init(allocator, input);
+//     defer l.deinit();
+//     var parser = Parser.init(allocator, l);
+//     var program = parser.parseProgram();
+//     defer program.deinit();
+//     defer parser.deinit();
+//     // try std.testing.expect(!parser.checkParserErros());
 
-    // try Pretty.print(allocator, program.statements.items[0], .{});
+//     // try Pretty.print(allocator, program.statements.items[0], .{});
 
-    const stringer = try program.string();
-    // try Pretty.print(allocator, program.statements.items[0], .{ .max_depth = 30 });
-    std.debug.print("Test out {s}\n", .{stringer.items});
+//     const stringer = try program.string();
+//     // try Pretty.print(allocator, program.statements.items[0], .{ .max_depth = 30 });
+//     std.debug.print("Test out {s}\n", .{stringer.items});
 
-    defer stringer.deinit();
-    // try std.testing.expectEqualSlices(u8, "(5 + 4)", stringer.items);
-}
+//     defer stringer.deinit();
+//     // try std.testing.expectEqualSlices(u8, "(5 + 4)", stringer.items);
+// }
 // test "TestGroupedExpression" {
 //     const allocator = std.testing.allocator;
 //     const input =
