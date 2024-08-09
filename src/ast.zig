@@ -115,6 +115,13 @@ pub const Statement = union(enum) {
                         _ = list.writer().write(tmp) catch unreachable;
                         return list.writer().context.items;
                     },
+                    .ifexp => {
+                        const ifexpression = self.expression.?.ifexp;
+                        const ifString = ifexpression.string() catch unreachable;
+                        _ = list.writer().write(ifString) catch unreachable;
+                        ifexpression.allocator.free(ifString);
+                        return "";
+                    },
                 }
             }
             return "";
@@ -128,6 +135,7 @@ pub const Expression = union(enum) {
     prefixExp: PrefixExpression,
     infixExp: InfixExpression,
     boolean: Boolean,
+    ifexp: IfExpression,
 
     pub fn init(allocator: Allocator) *Expression {
         const exp = allocator.create(Expression) catch unreachable;
@@ -152,6 +160,26 @@ pub const Expression = union(enum) {
                 return allocator.destroy(self);
             },
             .boolean => {
+                return allocator.destroy(self);
+            },
+            .ifexp => |ifexpr| {
+                if (ifexpr.consequence) |con| {
+                    for (con.statements.items) |value| {
+                        switch (value) {
+                            .expression => |exp| {
+                                exp.expression.?.deinit(allocator);
+                            },
+                            else => {
+                                //TODO: Stopped here 8/8 fix deiniting
+                            },
+                        }
+                    }
+                    con.statements.deinit();
+                }
+                if (ifexpr.alternative) |alt| {
+                    alt.statements.deinit();
+                }
+                ifexpr.condition.deinit(allocator);
                 return allocator.destroy(self);
             },
         }
@@ -186,6 +214,11 @@ pub const PrefixExpression = struct {
                 pf.allocator.free(prefixStrng);
             },
             .boolean => |boo| list.writer().write(boo.string()) catch unreachable,
+            .ifexp => |ifexpression| {
+                const ifString = ifexpression.string() catch unreachable;
+                _ = list.writer().write(ifString) catch unreachable;
+                ifexpression.allocator.free(ifString);
+            },
         };
 
         _ = list.writer().write(")") catch unreachable;
@@ -222,6 +255,11 @@ pub const InfixExpression = struct {
                 in.allocator.free(infixStrng);
             },
             .boolean => |boo| _ = list.writer().write(boo.string()) catch unreachable,
+            .ifexp => |ifexpression| {
+                const ifString = ifexpression.string() catch unreachable;
+                _ = list.writer().write(ifString) catch unreachable;
+                ifexpression.allocator.free(ifString);
+            },
         }
         _ = list.writer().write(" ") catch unreachable;
         _ = list.writer().write(self.operator) catch unreachable;
@@ -240,6 +278,11 @@ pub const InfixExpression = struct {
                 in.allocator.free(infixStrng);
             },
             .boolean => |boo| _ = list.writer().write(boo.string()) catch unreachable,
+            .ifexp => |ifexpression| {
+                const ifString = ifexpression.string() catch unreachable;
+                _ = list.writer().write(ifString) catch unreachable;
+                ifexpression.allocator.free(ifString);
+            },
         }
 
         _ = list.writer().write(")") catch unreachable;
@@ -252,16 +295,95 @@ pub const IfExpression = struct {
     allocator: Allocator,
     token: Token,
     condition: *Expression,
-    consequence: *BlockStatement,
-    alternative: *BlockStatement,
+    consequence: ?BlockStatement,
+    alternative: ?BlockStatement,
+
+    pub fn tokenLiteral(self: IfExpression) []const u8 {
+        return self.token.literal;
+    }
+
+    pub fn string(self: IfExpression) Allocator.Error![]u8 {
+        var list = std.ArrayList(u8).init(self.allocator);
+        _ = list.writer().write("if") catch unreachable;
+        switch (self.condition.*) {
+            .identifier => {
+                const tmp = self.condition.identifier.string();
+                _ = list.writer().write(tmp) catch unreachable;
+                // return list.writer().context.items;
+            },
+            .integerLiteral => {
+                const tmp = self.condition.integerLiteral.string();
+                _ = list.writer().write(tmp) catch unreachable;
+                // return list.writer().context.items;
+            },
+            .prefixExp => {
+                const prefix = self.condition.prefixExp;
+                const prefixString = prefix.string() catch unreachable;
+                _ = list.writer().write(prefixString) catch unreachable;
+                prefix.allocator.free(prefixString);
+            },
+            .infixExp => {
+                const infix = self.condition.infixExp;
+                const infixStrng = infix.string() catch unreachable;
+                _ = list.writer().write(infixStrng) catch unreachable;
+                infix.allocator.free(infixStrng);
+            },
+            .boolean => {
+                const tmp = self.condition.boolean.string();
+                _ = list.writer().write(tmp) catch unreachable;
+                // return list.writer().context.items;
+            },
+            .ifexp => |ifexpression| {
+                const ifString = ifexpression.string() catch unreachable;
+                _ = list.writer().write(ifString) catch unreachable;
+                ifexpression.allocator.free(ifString);
+            },
+        }
+        _ = list.writer().write(" ") catch unreachable;
+        const conString = self.consequence.?.string() catch unreachable;
+        _ = list.writer().write(conString) catch unreachable;
+        self.allocator.free(conString);
+
+        if (self.alternative) |alt| {
+            _ = list.writer().write(" else ") catch unreachable;
+            const altString = alt.string() catch unreachable;
+            _ = list.writer().write(altString) catch unreachable;
+            self.allocator.free(altString);
+        }
+
+        return list.toOwnedSlice();
+    }
 };
 
 pub const BlockStatement = struct {
+    allocator: Allocator,
     token: Token,
-    statements: []Statement,
+    statements: std.ArrayList(Statement),
 
     pub fn tokenLiteral(self: BlockStatement) []const u8 {
         return self.token.literal;
+    }
+
+    pub fn string(self: BlockStatement) Allocator.Error![]u8 {
+        var buff = std.ArrayList(u8).init(self.allocator);
+
+        for (self.statements.items) |value| {
+            switch (value) {
+                .letStatement => {
+                    // print("In letstatement {s}\n", .{value.letStatement.value.?.identifier.string()});
+                    _ = value.letStatement.string(&buff);
+                },
+                .returnStatement => {
+                    // print("In returnstatement {any}\n", .{value});
+                    _ = value.returnStatement.string(&buff);
+                },
+                .expression => {
+                    // print("In expression {s}\n", .{value.expression.expression.?.identifier.value});
+                    _ = value.expression.string(&buff);
+                },
+            }
+        }
+        return buff.toOwnedSlice();
     }
 };
 
