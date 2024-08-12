@@ -56,6 +56,7 @@ pub const Parser = struct {
         parser.registerPrefix(.FALSE, parseBoolean) catch unreachable;
         parser.registerPrefix(.LPAREN, parseGroupedExpressions) catch unreachable;
         parser.registerPrefix(.IF, parseIfExpression) catch unreachable;
+        parser.registerPrefix(.FUNCTION, parseFunctionLiteral) catch unreachable;
 
         parser.infixParseFns = Ast.GenericAst(infixParseFn).init(allocator) catch unreachable;
         parser.registerInfix(.PLUS, parseInfixExpression) catch unreachable;
@@ -325,6 +326,64 @@ pub const Parser = struct {
         return block;
     }
 
+    pub fn parseFunctionParemeters(self: *Parser) ?std.ArrayList(Ast.Identifier) {
+        var identifiers = std.ArrayList(Ast.Identifier).init(self.allocator);
+        if (self.peekTokenIs(.RPAREN)) {
+            self.nextToken(self.l.arenaAlloc.allocator());
+            return identifiers;
+        }
+
+        self.nextToken(self.l.arenaAlloc.allocator());
+        var ident = Ast.Identifier{
+            .token = self.curToken,
+            .value = self.curToken.literal,
+        };
+
+        identifiers.append(ident) catch unreachable;
+        while (self.peekTokenIs(.COMMA)) {
+            self.nextToken(self.l.arenaAlloc.allocator());
+            self.nextToken(self.l.arenaAlloc.allocator());
+
+            ident = Ast.Identifier{
+                .token = self.curToken,
+                .value = self.curToken.literal,
+            };
+            identifiers.append(ident) catch unreachable;
+        }
+
+        if (!self.expectPeek(.RPAREN)) {
+            return null;
+        }
+
+        return identifiers;
+    }
+
+    pub fn parseFunctionLiteral(self: *Parser) ?*Ast.Expression {
+        var expression = Ast.FunctionLiteral{
+            .allocator = self.allocator,
+            .body = null,
+            .parameters = undefined,
+            .token = self.curToken,
+        };
+
+        if (!self.expectPeek(.LPAREN)) {
+            return null;
+        }
+
+        expression.parameters = self.parseFunctionParemeters();
+        if (!self.expectPeek(.LBRACE)) {
+            return null;
+        }
+
+        expression.body = self.parseBlockStatement();
+        const exp = Ast.Expression.init(self.allocator);
+        exp.* = Ast.Expression{
+            .function = expression,
+        };
+
+        return exp;
+    }
+
     pub fn parseGroupedExpressions(self: *Parser) ?*Ast.Expression {
         self.nextToken(self.l.arenaAlloc.allocator());
 
@@ -367,7 +426,12 @@ pub const Parser = struct {
         }
         const prefix = self.prefixParseFns.list[@intFromEnum(self.curToken.tType)];
 
-        var leftexp = prefix(self).?;
+        var leftexp = prefix(self);
+        if (leftexp) |val| {
+            leftexp = val;
+        } else {
+            return null;
+        }
 
         while (!self.peekTokenIs(.SEMICOLON) and @intFromEnum(prec) < @intFromEnum(self.peekPrecedence())) {
             const inExists = self.infixParseFns.filled.get(@intFromEnum(self.peekToken.tType));
@@ -378,7 +442,12 @@ pub const Parser = struct {
 
             self.nextToken(self.l.arenaAlloc.allocator());
 
-            leftexp = infix(self, leftexp).?;
+            leftexp = infix(self, leftexp.?);
+            if (leftexp) |val| {
+                leftexp = val;
+            } else {
+                return null;
+            }
         }
         // std.debug.print("In Parse Expression {s}\n", .{leftexp.identifier.string()});
         return leftexp;
@@ -459,7 +528,7 @@ test "TestFunctionLiteral" {
     var program = parser.parseProgram();
     defer program.deinit();
     defer parser.deinit();
-    // try std.testing.expect(!parser.checkParserErros());
+    try std.testing.expect(parser.checkParserErros());
 
     // try Pretty.print(allocator, program.statements.items[0], .{});
 
@@ -481,7 +550,7 @@ test "TestFunctionLiteral" {
 //     var program = parser.parseProgram();
 //     defer program.deinit();
 //     defer parser.deinit();
-//     // try std.testing.expect(!parser.checkParserErros());
+//     try std.testing.expect(!parser.checkParserErros());
 
 //     // try Pretty.print(allocator, program.statements.items[0], .{});
 

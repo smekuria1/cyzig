@@ -120,7 +120,12 @@ pub const Statement = union(enum) {
                         const ifString = ifexpression.string() catch unreachable;
                         _ = list.writer().write(ifString) catch unreachable;
                         ifexpression.allocator.free(ifString);
-                        return "";
+                    },
+                    .function => {
+                        const fun = self.expression.?.function;
+                        const funString = fun.string() catch unreachable;
+                        _ = list.writer().write(funString) catch unreachable;
+                        fun.allocator.free(funString);
                     },
                 }
             }
@@ -136,6 +141,7 @@ pub const Expression = union(enum) {
     infixExp: InfixExpression,
     boolean: Boolean,
     ifexp: IfExpression,
+    function: FunctionLiteral,
 
     pub fn init(allocator: Allocator) *Expression {
         const exp = allocator.create(Expression) catch unreachable;
@@ -225,6 +231,11 @@ pub const PrefixExpression = struct {
                 _ = list.writer().write(ifString) catch unreachable;
                 ifexpression.allocator.free(ifString);
             },
+            .function => |fun| {
+                const funString = fun.string() catch unreachable;
+                _ = list.writer().write(funString) catch unreachable;
+                fun.allocator.free(funString);
+            },
         };
 
         _ = list.writer().write(")") catch unreachable;
@@ -266,6 +277,11 @@ pub const InfixExpression = struct {
                 _ = list.writer().write(ifString) catch unreachable;
                 ifexpression.allocator.free(ifString);
             },
+            .function => |fun| {
+                const funString = fun.string() catch unreachable;
+                _ = list.writer().write(funString) catch unreachable;
+                fun.allocator.free(funString);
+            },
         }
         _ = list.writer().write(" ") catch unreachable;
         _ = list.writer().write(self.operator) catch unreachable;
@@ -288,6 +304,11 @@ pub const InfixExpression = struct {
                 const ifString = ifexpression.string() catch unreachable;
                 _ = list.writer().write(ifString) catch unreachable;
                 ifexpression.allocator.free(ifString);
+            },
+            .function => |fun| {
+                const funString = fun.string() catch unreachable;
+                _ = list.writer().write(funString) catch unreachable;
+                fun.allocator.free(funString);
             },
         }
 
@@ -344,6 +365,11 @@ pub const IfExpression = struct {
                 _ = list.writer().write(ifString) catch unreachable;
                 ifexpression.allocator.free(ifString);
             },
+            .function => |fun| {
+                const funString = fun.string() catch unreachable;
+                _ = list.writer().write(funString) catch unreachable;
+                fun.allocator.free(funString);
+            },
         }
         _ = list.writer().write(" ") catch unreachable;
         const conString = self.consequence.?.string() catch unreachable;
@@ -364,26 +390,31 @@ pub const IfExpression = struct {
 pub const FunctionLiteral = struct {
     allocator: Allocator,
     token: Token,
-    parameters: std.ArrayList(Identifier),
+    parameters: ?std.ArrayList(Identifier),
     body: ?BlockStatement,
 
     pub fn tokenLiteral(self: FunctionLiteral) []const u8 {
         return self.token.literal;
     }
 
-    pub fn string(self: FunctionLiteral) Allocator![]u8 {
+    pub fn string(self: FunctionLiteral) Allocator.Error![]u8 {
         var list = std.ArrayList(u8).init(self.allocator);
-        var params: [1024]u8 = undefined;
-        assert(self.parameters.items.len <= 1024);
-        for (0.., self.parameters.items) |i, value| {
-            params[i] = value.string();
+        var paramlist = std.ArrayList([]const u8).init(self.allocator);
+        defer paramlist.deinit();
+        // var params: []const u8 = undefined;
+        // assert(self.parameters.?.items.len <= 1024);
+        for (self.parameters.?.items) |value| {
+            paramlist.append(value.string()) catch unreachable;
+            paramlist.append(",") catch unreachable;
         }
         // params[self.parameters.items.len + 1] = "-";
 
         _ = list.writer().write(self.tokenLiteral()) catch unreachable;
         _ = list.writer().write("(") catch unreachable;
         //TODO: add comma separator
-        _ = list.writer().write(params[0..self.parameters.items.len]) catch unreachable;
+        const commaList = paramlist.toOwnedSlice() catch unreachable;
+        _ = list.writer().write(commaList[0..][]) catch unreachable;
+        self.allocator.free(commaList);
         _ = list.writer().write(")") catch unreachable;
 
         const bodystring = self.body.?.string() catch unreachable;
