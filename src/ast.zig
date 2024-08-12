@@ -194,6 +194,23 @@ pub const Expression = union(enum) {
                 ifexpr.condition.deinit(allocator);
                 return allocator.destroy(self);
             },
+            .function => |fun| {
+                if (fun.parameters) |params| {
+                    params.deinit();
+                }
+                if (fun.body) |body| {
+                    for (body.statements.items) |value| {
+                        switch (value) {
+                            .expression => |exp| {
+                                exp.expression.?.deinit(allocator);
+                            },
+                            else => {},
+                        }
+                    }
+                    body.statements.deinit();
+                }
+                return allocator.destroy(self);
+            },
         }
     }
 };
@@ -403,8 +420,11 @@ pub const FunctionLiteral = struct {
         defer paramlist.deinit();
         // var params: []const u8 = undefined;
         // assert(self.parameters.?.items.len <= 1024);
-        for (self.parameters.?.items) |value| {
+        for (0.., self.parameters.?.items) |i, value| {
             paramlist.append(value.string()) catch unreachable;
+            if (i >= self.parameters.?.items.len - 1) {
+                continue;
+            }
             paramlist.append(",") catch unreachable;
         }
         // params[self.parameters.items.len + 1] = "-";
@@ -413,7 +433,9 @@ pub const FunctionLiteral = struct {
         _ = list.writer().write("(") catch unreachable;
         //TODO: add comma separator
         const commaList = paramlist.toOwnedSlice() catch unreachable;
-        _ = list.writer().write(commaList[0..][]) catch unreachable;
+        for (commaList) |value| {
+            _ = list.writer().write(value) catch unreachable;
+        }
         self.allocator.free(commaList);
         _ = list.writer().write(")") catch unreachable;
 

@@ -521,6 +521,8 @@ test "TestFunctionLiteral" {
     const allocator = std.testing.allocator;
     const input =
         \\fn(x, y) { x + y; }
+        \\fn() {};
+        \\fn(x, y, z) {};
     ;
     var l = Lexer.init(allocator, input);
     defer l.deinit();
@@ -528,7 +530,7 @@ test "TestFunctionLiteral" {
     var program = parser.parseProgram();
     defer program.deinit();
     defer parser.deinit();
-    try std.testing.expect(parser.checkParserErros());
+    try std.testing.expect(!parser.checkParserErros());
 
     // try Pretty.print(allocator, program.statements.items[0], .{});
 
