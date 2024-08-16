@@ -461,32 +461,32 @@ pub const CallExpression = struct {
                 .prefixExp => |pf| {
                     const prefixString = pf.string() catch unreachable;
                     argList.append(prefixString) catch unreachable;
-                    pf.allocator.free(prefixString);
+                    // pf.allocator.free(prefixString);
                 },
                 .infixExp => |in| {
                     const infixStrng = in.string() catch unreachable;
                     argList.append(infixStrng) catch unreachable;
-                    in.allocator.free(infixStrng);
+                    // in.allocator.free(infixStrng);
                 },
                 .boolean => |boo| _ = list.writer().write(boo.string()) catch unreachable,
                 .ifexp => |ifexpression| {
                     const ifString = ifexpression.string() catch unreachable;
                     argList.append(ifString) catch unreachable;
-                    ifexpression.allocator.free(ifString);
+                    // ifexpression.allocator.free(ifString);
                 },
                 .function => |fun| {
                     const funString = fun.string() catch unreachable;
                     argList.append(funString) catch unreachable;
-                    fun.allocator.free(funString);
+                    // fun.allocator.free(funString);
                 },
                 .callExpression => |call| {
                     const callstring = call.string() catch unreachable;
                     argList.append(callstring) catch unreachable;
-                    call.allocator.free(callstring);
+                    // call.allocator.free(callstring);
                 },
             }
 
-            if (i >= self.arguments.?.items.len) {
+            if (i >= self.arguments.?.items.len - 1) {
                 continue;
             }
             argList.append(",") catch unreachable;
@@ -538,6 +538,7 @@ pub const CallExpression = struct {
         const commaList = argList.toOwnedSlice() catch unreachable;
         for (commaList) |value| {
             _ = list.writer().write(value) catch unreachable;
+            self.allocator.free(value);
         }
         self.allocator.free(commaList);
         _ = list.writer().write(")") catch unreachable;
