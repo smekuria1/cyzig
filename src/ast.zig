@@ -451,46 +451,7 @@ pub const CallExpression = struct {
 
     pub fn string(self: CallExpression) Allocator.Error![]u8 {
         var list = std.ArrayList(u8).init(self.allocator);
-        var argList = std.ArrayList([]const u8).init(self.allocator);
-        defer argList.deinit();
 
-        for (0.., self.arguments.?.items) |i, value| {
-            switch (value.*) {
-                .identifier => |id| argList.append(id.string()) catch unreachable,
-                .integerLiteral => |int| argList.append(int.string()) catch unreachable,
-                .prefixExp => |pf| {
-                    const prefixString = pf.string() catch unreachable;
-                    argList.append(prefixString) catch unreachable;
-                    // pf.allocator.free(prefixString);
-                },
-                .infixExp => |in| {
-                    const infixStrng = in.string() catch unreachable;
-                    argList.append(infixStrng) catch unreachable;
-                    // in.allocator.free(infixStrng);
-                },
-                .boolean => |boo| _ = list.writer().write(boo.string()) catch unreachable,
-                .ifexp => |ifexpression| {
-                    const ifString = ifexpression.string() catch unreachable;
-                    argList.append(ifString) catch unreachable;
-                    // ifexpression.allocator.free(ifString);
-                },
-                .function => |fun| {
-                    const funString = fun.string() catch unreachable;
-                    argList.append(funString) catch unreachable;
-                    // fun.allocator.free(funString);
-                },
-                .callExpression => |call| {
-                    const callstring = call.string() catch unreachable;
-                    argList.append(callstring) catch unreachable;
-                    // call.allocator.free(callstring);
-                },
-            }
-
-            if (i >= self.arguments.?.items.len - 1) {
-                continue;
-            }
-            argList.append(",") catch unreachable;
-        }
         switch (self.function.*) {
             .identifier => {
                 const tmp = self.function.identifier.string();
@@ -535,12 +496,50 @@ pub const CallExpression = struct {
             },
         }
         _ = list.writer().write("(") catch unreachable;
-        const commaList = argList.toOwnedSlice() catch unreachable;
-        for (commaList) |value| {
-            _ = list.writer().write(value) catch unreachable;
-            self.allocator.free(value);
+        for (0.., self.arguments.?.items) |i, value| {
+            switch (value.*) {
+                .identifier => |id| _ = list.writer().write(id.string()) catch unreachable,
+                .integerLiteral => |int| _ = list.writer().write(int.string()) catch unreachable,
+                .prefixExp => |pf| {
+                    const prefixString = pf.string() catch unreachable;
+                    _ = list.writer().write(prefixString) catch unreachable;
+                    //  argList.append(prefixString) catch unreachable;
+                    pf.allocator.free(prefixString);
+                },
+                .infixExp => |in| {
+                    const infixStrng = in.string() catch unreachable;
+                    _ = list.writer().write(infixStrng) catch unreachable;
+                    // argList.append(infixStrng) catch unreachable;
+                    in.allocator.free(infixStrng);
+                },
+                .boolean => |boo| _ = list.writer().write(boo.string()) catch unreachable,
+                .ifexp => |ifexpression| {
+                    const ifString = ifexpression.string() catch unreachable;
+                    _ = list.writer().write(ifString) catch unreachable;
+                    // argList.append(ifString) catch unreachable;
+                    ifexpression.allocator.free(ifString);
+                },
+                .function => |fun| {
+                    const funString = fun.string() catch unreachable;
+                    _ = list.writer().write(funString) catch unreachable;
+                    // argList.append(funString) catch unreachable;
+                    fun.allocator.free(funString);
+                },
+                .callExpression => |call| {
+                    const callstring = call.string() catch unreachable;
+                    _ = list.writer().write(callstring) catch unreachable;
+                    // argList.append(callstring) catch unreachable;
+                    call.allocator.free(callstring);
+                },
+            }
+
+            if (i >= self.arguments.?.items.len - 1) {
+                continue;
+            }
+            _ = list.writer().write(", ") catch unreachable;
+            // argList.append(",") catch unreachable;
         }
-        self.allocator.free(commaList);
+
         _ = list.writer().write(")") catch unreachable;
 
         return list.toOwnedSlice();
