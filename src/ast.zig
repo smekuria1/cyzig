@@ -20,11 +20,15 @@ pub const Statement = union(enum) {
         const Self = @This();
         token: Token,
         name: Identifier,
-        value: ?Expression,
+        value: ?*Expression,
 
         pub fn printValue(self: *Self) void {
             print("{} {} \n", .{ self.token.literal, self.value.?.identifier.value });
         }
+
+        // pub fn deinit(self: *Self) void {
+        //     self.value.?.deinit(self.allocator);
+        // }
 
         pub fn string(self: Self, list: *std.ArrayList(u8)) []const u8 {
             _ = list.writer().write(self.token.literal) catch unreachable;
@@ -33,7 +37,7 @@ pub const Statement = union(enum) {
             if (self.value) |value| {
                 _ = list.writer().write(" = ") catch unreachable;
                 //TODO: add Prefix printing abstract it out before tho
-                switch (value) {
+                switch (value.*) {
                     .identifier => {
                         const tmp = self.value.?.identifier.string();
                         _ = list.writer().write(tmp) catch unreachable;
@@ -44,8 +48,42 @@ pub const Statement = union(enum) {
                         _ = list.writer().write(tmp) catch unreachable;
                         return list.writer().context.items;
                     },
-                    else => {
+                    .prefixExp => {
+                        const prefix = self.value.?.*.prefixExp;
+                        const prefixString = prefix.string() catch unreachable;
+                        _ = list.writer().write(prefixString) catch unreachable;
+                        prefix.allocator.free(prefixString);
                         return "";
+                    },
+                    .infixExp => {
+                        const infix = self.value.?.*.infixExp;
+                        const infixStrng = infix.string() catch unreachable;
+                        _ = list.writer().write(infixStrng) catch unreachable;
+                        infix.allocator.free(infixStrng);
+                        return "";
+                    },
+                    .boolean => {
+                        const tmp = self.value.?.*.boolean.string();
+                        _ = list.writer().write(tmp) catch unreachable;
+                        return list.writer().context.items;
+                    },
+                    .ifexp => {
+                        const ifexpression = self.value.?.*.ifexp;
+                        const ifString = ifexpression.string() catch unreachable;
+                        _ = list.writer().write(ifString) catch unreachable;
+                        ifexpression.allocator.free(ifString);
+                    },
+                    .function => {
+                        const fun = self.value.?.*.function;
+                        const funString = fun.string() catch unreachable;
+                        _ = list.writer().write(funString) catch unreachable;
+                        fun.allocator.free(funString);
+                    },
+                    .callExpression => {
+                        const callexp = self.value.?.*.callExpression;
+                        const callString = callexp.string() catch unreachable;
+                        _ = list.writer().write(callString) catch unreachable;
+                        callexp.allocator.free(callString);
                     },
                 }
             }
@@ -59,7 +97,7 @@ pub const Statement = union(enum) {
     pub const ReturnStatement = struct {
         const Self = @This();
         token: Token,
-        returnValue: ?Expression,
+        returnValue: ?*Expression,
 
         pub fn string(self: Self, list: *std.ArrayList(u8)) []const u8 {
             // var buf: [1024]u8 = undefined;
@@ -67,9 +105,56 @@ pub const Statement = union(enum) {
             list.writer().writeAll(self.token.literal) catch unreachable;
             list.writer().writeAll(" ") catch unreachable;
 
-            if (self.returnValue != null) {
-                // _ = std.fmt.bufPrint(&buf, "{s}", .{self.returnValue.?.identifier.string()}) catch unreachable;
-                list.writer().writeAll(self.returnValue.?.identifier.string()) catch unreachable;
+            if (self.returnValue) |value| {
+                switch (value.*) {
+                    .identifier => {
+                        const tmp = self.returnValue.?.identifier.string();
+                        _ = list.writer().write(tmp) catch unreachable;
+                        return list.writer().context.items;
+                    },
+                    .integerLiteral => {
+                        const tmp = self.returnValue.?.integerLiteral.string();
+                        _ = list.writer().write(tmp) catch unreachable;
+                        return list.writer().context.items;
+                    },
+                    .prefixExp => {
+                        const prefix = self.returnValue.?.*.prefixExp;
+                        const prefixString = prefix.string() catch unreachable;
+                        _ = list.writer().write(prefixString) catch unreachable;
+                        prefix.allocator.free(prefixString);
+                        return "";
+                    },
+                    .infixExp => {
+                        const infix = self.returnValue.?.*.infixExp;
+                        const infixStrng = infix.string() catch unreachable;
+                        _ = list.writer().write(infixStrng) catch unreachable;
+                        infix.allocator.free(infixStrng);
+                        return "";
+                    },
+                    .boolean => {
+                        const tmp = self.returnValue.?.*.boolean.string();
+                        _ = list.writer().write(tmp) catch unreachable;
+                        return list.writer().context.items;
+                    },
+                    .ifexp => {
+                        const ifexpression = self.returnValue.?.*.ifexp;
+                        const ifString = ifexpression.string() catch unreachable;
+                        _ = list.writer().write(ifString) catch unreachable;
+                        ifexpression.allocator.free(ifString);
+                    },
+                    .function => {
+                        const fun = self.returnValue.?.*.function;
+                        const funString = fun.string() catch unreachable;
+                        _ = list.writer().write(funString) catch unreachable;
+                        fun.allocator.free(funString);
+                    },
+                    .callExpression => {
+                        const callexp = self.returnValue.?.*.callExpression;
+                        const callString = callexp.string() catch unreachable;
+                        _ = list.writer().write(callString) catch unreachable;
+                        callexp.allocator.free(callString);
+                    },
+                }
             }
 
             // _ = std.fmt.bufPrint(&buf, ";", .{}) catch unreachable;
@@ -694,8 +779,15 @@ pub const Program = struct {
                         expression.deinit(self.allocator);
                     }
                 },
-                else => {
-                    continue;
+                .letStatement => |let| {
+                    if (let.value) |val| {
+                        val.deinit(self.allocator);
+                    }
+                },
+                .returnStatement => |ret| {
+                    if (ret.returnValue) |retVal| {
+                        retVal.deinit(self.allocator);
+                    }
                 },
             }
         }
@@ -717,14 +809,17 @@ pub const Program = struct {
                 .letStatement => {
                     // print("In letstatement {s}\n", .{value.letStatement.value.?.identifier.string()});
                     _ = value.letStatement.string(&buff);
+                    _ = buff.writer().write("\n") catch unreachable;
                 },
                 .returnStatement => {
                     // print("In returnstatement {any}\n", .{value});
                     _ = value.returnStatement.string(&buff);
+                    _ = buff.writer().write("\n") catch unreachable;
                 },
                 .expression => {
                     // print("In expression {s}\n", .{value.expression.expression.?.identifier.value});
                     _ = value.expression.string(&buff);
+                    _ = buff.writer().write("\n") catch unreachable;
                 },
             }
         }

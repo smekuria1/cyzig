@@ -4,6 +4,7 @@ const Token = @import("token.zig").Token;
 const TokenType = @import("token.zig").TokenType;
 const Parser = @import("./parser.zig").Parser;
 const max_length = 1024;
+const pretty = @import("./pretty.zig");
 // We can read any arbitrary number type with number_type
 
 pub fn start(allocator: std.mem.Allocator) !void {
@@ -17,18 +18,27 @@ pub fn start(allocator: std.mem.Allocator) !void {
             var lexer = Lexer.init(allocator, value);
             var parser = Parser.init(allocator, lexer);
             var program = parser.parseProgram();
-            const stringer = try program.string();
-            std.debug.print("test out {s}", .{stringer.items});
-            var token = lexer.nextToken(lexer.arenaAlloc.allocator());
-            _ = parser.checkParserErros();
-            while (token.?.tType != TokenType.EOF) {
-                std.debug.print("{any} -- {s}\n", .{ token.?.tType, token.?.literal });
-                token = lexer.nextToken(lexer.arenaAlloc.allocator());
+
+            if (parser.checkParserErros()) {
+                printParseErrors(parser.errors);
+                continue;
             }
+            // TODO: Work out a way to visualize the AST as a tree.
+            // try pretty.print(allocator, program.statements.items[0], .{  });
+            const stringer = try program.string();
+            std.debug.print("{s}", .{stringer.items});
 
             defer lexer.deinit();
             defer parser.deinit();
             defer stringer.deinit();
         }
+    }
+}
+
+fn printParseErrors(errors: std.ArrayList([]const u8)) void {
+    std.debug.print("WHOOPSIE YOU MADE AN ERROR\n \t (high chance its the parser freaking out)\n", .{});
+    std.debug.print("Parser Errors: \n", .{});
+    for (errors.items) |value| {
+        std.debug.print("\t{s}\n", .{value});
     }
 }
