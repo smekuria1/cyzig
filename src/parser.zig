@@ -845,65 +845,6 @@ pub fn checkTokenTypeMatch(stmt: Ast.Statement, kind: TokenType) bool {
 //     }
 // }
 
-test "Test ReturnStatement" {
-    const allocator = std.testing.allocator;
-    const input =
-        \\return 5;
-        \\return x;
-        \\return y + x;
-    ;
-    var l = Lexer.init(allocator, input);
-    defer l.deinit();
-    var parser = Parser.init(allocator, l);
-    var program = parser.parseProgram();
-    defer program.deinit();
-    defer parser.deinit();
-    // try Pretty.print(allocator, program, .{});
-    try std.testing.expect(!parser.checkParserErros());
-    try std.testing.expectEqualDeep(3, program.statements.items.len);
-
-    for (program.statements.items) |value| {
-        try std.testing.expect(checkTokenTypeMatch(value, .RETURN));
-    }
-}
-
-pub fn checkTokenTypeMatch(stmt: Ast.Statement, kind: TokenType) bool {
-    switch (stmt) {
-        .letStatement => {
-            return stmt.letStatement.token.tType == kind;
-        },
-        .returnStatement => {
-            return stmt.returnStatement.token.tType == kind;
-        },
-        .expression => {
-            return stmt.expression.token.tType == kind;
-        },
-    }
-}
-test "TestString" {
-    const allocator = std.testing.allocator;
-    const input =
-        \\ let myvar = anothervar;
-    ;
-    var l = Lexer.init(allocator, input);
-    defer l.deinit();
-    var parser = Parser.init(allocator, l);
-    var program = parser.parseProgram();
-
-//     // std.debug.print("\n{any}\n", .{program.statements.items});
-
-//     // program.statements.items[0].letStatement.value = Ast.Expression{ .identifier = Ast.Identifier.init(Token{
-//     //     .literal = "anothervar",
-//     //     .tType = .IDENT,
-//     // }) };
-//     const stringer = try program.string();
-//     // std.debug.print("\n{s}\n", .{stringer.items});
-//     defer program.deinit();
-//     defer parser.deinit();
-//     defer stringer.deinit();
-//     // try std.testing.expectEqualSlices(u8, "let myvar = anothervar", stringer.items);
-// }
-
 // test "TestIdentifierExpression" {
 //     const allocator = std.testing.allocator;
 //     const input =
