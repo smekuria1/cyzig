@@ -52,7 +52,10 @@ fn testEval(allocator: Allocator, input: []const u8) Object {
     defer parser.deinit();
     defer program.deinit();
 
-    return Eval(Ast.Node{ .program = program }).?;
+    if (Eval(Ast.Node{ .program = program })) |eval| {
+        return eval;
+    }
+    return Object{ .nil = Object.Nil{} };
 }
 
 fn testIntegerObject(obj: Object, expected: i64) bool {
@@ -65,7 +68,7 @@ fn testIntegerObject(obj: Object, expected: i64) bool {
             return true;
         },
         else => {
-            std.debug.print("object is not integer {any}\n", .{obj});
+            std.debug.print("object is not integer got {any}\n", .{obj});
             return false;
         },
     }

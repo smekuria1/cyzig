@@ -40,8 +40,6 @@ pub const Object = union(enum) {
     };
 
     pub const Nil = struct {
-        allocator: Allocator,
-
         pub fn inspect(self: *Nil) ![]const u8 {
             _ = self;
             return "nil";
