@@ -9,6 +9,7 @@ pub const Node = union(enum) {
     const self = @This();
     statement: Statement,
     expression: Expression,
+    program: Program,
 };
 
 pub const Statement = union(enum) {
@@ -706,6 +707,7 @@ pub const BlockStatement = struct {
 };
 
 pub const IntegerLiteral = struct {
+    allocator: Allocator,
     token: Token,
     value: i64,
 
@@ -727,15 +729,9 @@ pub const IntegerLiteral = struct {
 };
 
 pub const Identifier = struct {
+    allocator: Allocator,
     token: Token,
     value: []const u8,
-
-    pub fn init(token: Token) Identifier {
-        return .{
-            .token = token,
-            .value = token.literal,
-        };
-    }
 
     pub fn tokenLiteral(self: Identifier) []const u8 {
         return self.token.literal;
@@ -747,6 +743,7 @@ pub const Identifier = struct {
     }
 };
 pub const Boolean = struct {
+    allocator: Allocator,
     token: Token,
     value: bool,
 
