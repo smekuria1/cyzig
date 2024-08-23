@@ -33,14 +33,14 @@ pub fn start(allocator: std.mem.Allocator) !void {
                 switch (ev) {
                     .boolean => |boo| {
                         const booStr = try boo.inspect();
-                        std.debug.print("{any}\n", .{booStr});
+                        std.debug.print("{s}\n", .{booStr});
                     },
                     .integer => |int| {
                         const intStr = try int.inspect();
-                        std.debug.print("{any}\n", .{intStr});
+                        std.debug.print("{s}\n", .{intStr});
                     },
                     .nil => |NULL| {
-                        std.debug.print("{any}\n", .{NULL.inspect()});
+                        std.debug.print("{s}\n", .{NULL.inspect()});
                     },
                 }
             }

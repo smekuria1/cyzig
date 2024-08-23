@@ -21,20 +21,44 @@ pub fn Eval(node: Ast.Node) ?Object {
                 },
             }
         },
+        .statement => |stmt| {
+            switch (stmt) {
+                .expression => |expr| {
+                    if (expr.expression) |exp| {
+                        return Eval(Ast.Node{ .expression = exp.* });
+                    }
+                },
+                .letStatement => |let| {
+                    if (let.value) |exp| {
+                        return Eval(Ast.Node{ .expression = exp.* });
+                    }
+                },
+                .returnStatement => |ret| {
+                    if (ret.returnValue) |exp| {
+                        return Eval(Ast.Node{ .expression = exp.* });
+                    }
+                },
+            }
+        },
         .program => |prog| {
             return evalStatements(prog.statements);
         },
-
-        else => {
-            return null;
-        },
     }
+
+    return null;
 }
 // TODO: FIX this 8/22/2024
 fn evalStatements(stmts: std.ArrayList(Ast.Statement)) Object {
-    var result = Object{};
+    var result: Object = undefined;
     for (stmts.items) |value| {
-        result = Eval(Ast.Node{ .statement = value });
+        const ev = Eval(Ast.Node{ .statement = value });
+        if (ev) |evaluated| {
+            switch (evaluated) {
+                .boolean => result = Object{ .boolean = evaluated.boolean },
+                .integer => result = Object{ .integer = evaluated.integer },
+                .nil => result = Object{ .nil = evaluated.nil },
+            }
+        }
     }
 
     return result;
