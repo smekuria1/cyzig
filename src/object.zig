@@ -15,11 +15,11 @@ pub const Object = union(enum) {
         allocator: Allocator,
         value: i64,
 
-        pub fn inspect(self: *Integer) ![]const u8 {
-            return std.fmt.allocPrint(self.allocatorField, "{d}", .{self.value});
+        pub fn inspect(self: Integer) ![]const u8 {
+            return std.fmt.allocPrint(self.allocator, "{d}", .{self.value});
         }
 
-        pub fn oType(self: *Integer) ObjectType {
+        pub fn oType(self: Integer) ObjectType {
             _ = self;
             return ObjectType.INTEGER_OBJ;
         }
@@ -29,23 +29,23 @@ pub const Object = union(enum) {
         allocator: Allocator,
         value: bool,
 
-        pub fn inspect(self: *Boolean) ![]const u8 {
+        pub fn inspect(self: Boolean) ![]const u8 {
             return std.fmt.allocPrint(self.allocator, "{}", .{self.value});
         }
 
-        pub fn oType(self: *Boolean) ObjectType {
+        pub fn oType(self: Boolean) ObjectType {
             _ = self;
             return ObjectType.BOOLEAN_OBJ;
         }
     };
 
     pub const Nil = struct {
-        pub fn inspect(self: *Nil) ![]const u8 {
+        pub fn inspect(self: Nil) []const u8 {
             _ = self;
             return "nil";
         }
 
-        pub fn oType(self: *Nil) ObjectType {
+        pub fn oType(self: Nil) ObjectType {
             _ = self;
             return ObjectType.NULL_OBJ;
         }

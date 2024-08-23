@@ -21,10 +21,23 @@ pub fn Eval(node: Ast.Node) ?Object {
                 },
             }
         },
+        .program => |prog| {
+            return evalStatements(prog.statements);
+        },
+
         else => {
             return null;
         },
     }
+}
+// TODO: FIX this 8/22/2024
+fn evalStatements(stmts: std.ArrayList(Ast.Statement)) Object {
+    var result = Object{};
+    for (stmts.items) |value| {
+        result = Eval(Ast.Node{ .statement = value });
+    }
+
+    return result;
 }
 
 test "TestEvalIntegerExpression" {
@@ -62,13 +75,13 @@ fn testIntegerObject(obj: Object, expected: i64) bool {
     switch (obj) {
         .integer => |int| {
             if (int.value != expected) {
-                std.debug.print("object has wrong value. got={d}, want {d}\n", .{ int.value, expected });
+                std.debug.print("\nobject has wrong value. got={d}, want {d}\n", .{ int.value, expected });
                 return false;
             }
             return true;
         },
         else => {
-            std.debug.print("object is not integer got {any}\n", .{obj});
+            std.debug.print("\nobject is not integer got {any}\n", .{obj});
             return false;
         },
     }

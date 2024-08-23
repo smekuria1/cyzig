@@ -5,7 +5,8 @@ const TokenType = @import("token.zig").TokenType;
 const Parser = @import("./parser.zig").Parser;
 const max_length = 1024;
 const pretty = @import("./pretty.zig");
-// We can read any arbitrary number type with number_type
+const Evaluator = @import("./evaluator.zig");
+const Ast = @import("./ast.zig");
 
 pub fn start(allocator: std.mem.Allocator) !void {
     const stdin = std.io.getStdIn().reader();
@@ -26,8 +27,23 @@ pub fn start(allocator: std.mem.Allocator) !void {
             // TODO: Work out a way to visualize the AST as a tree.
             // try pretty.print(allocator, program.statements.items[0], .{  });
             const stringer = try program.string();
-            std.debug.print("{s}", .{stringer.items});
-
+            // std.debug.print("{s}", .{stringer.items});
+            const evaluated = Evaluator.Eval(Ast.Node{ .program = program });
+            if (evaluated) |ev| {
+                switch (ev) {
+                    .boolean => |boo| {
+                        const booStr = try boo.inspect();
+                        std.debug.print("{any}\n", .{booStr});
+                    },
+                    .integer => |int| {
+                        const intStr = try int.inspect();
+                        std.debug.print("{any}\n", .{intStr});
+                    },
+                    .nil => |NULL| {
+                        std.debug.print("{any}\n", .{NULL.inspect()});
+                    },
+                }
+            }
             defer lexer.deinit();
             defer parser.deinit();
             defer stringer.deinit();
