@@ -26,11 +26,13 @@ pub const Object = union(enum) {
     };
 
     pub const Boolean = struct {
-        allocator: Allocator,
         value: bool,
 
         pub fn inspect(self: Boolean) ![]const u8 {
-            return std.fmt.allocPrint(self.allocator, "{}", .{self.value});
+            if (self.value == true) {
+                return "true";
+            }
+            return "false";
         }
 
         pub fn oType(self: Boolean) ObjectType {

@@ -6,15 +6,41 @@ const ObjectType = @import("./object.zig").ObjectType;
 const Lexer = @import("./lexer.zig").Lexer;
 const Parser = @import("./parser.zig").Parser;
 
+const NULL = Object{ .nil = Object.Nil{} };
+const TRUE = Object{ .boolean = Object.Boolean{ .value = true } };
+const FALSE = Object{ .boolean = Object.Boolean{ .value = false } };
+
 pub fn Eval(node: Ast.Node) ?Object {
     switch (node) {
         .expression => |exp| {
             switch (exp) {
                 .integerLiteral => |int| {
-                    return Object{ .integer = Object.Integer{
-                        .allocator = int.allocator,
-                        .value = int.value,
-                    } };
+                    return Object{
+                        .integer = Object.Integer{
+                            .allocator = int.allocator,
+                            .value = int.value,
+                        },
+                    };
+                },
+                // Not the best way of dealing with native bools
+                .boolean => |boo| {
+                    return nativeBooltoBoolean(boo.value);
+                },
+                .prefixExp => |pref| {
+                    const evalRight = Eval(Ast.Node{ .expression = pref.right.* });
+                    if (evalRight) |right| {
+                        return evalPrefixExpression(pref.allocator, pref.operator, right);
+                    }
+                    return null;
+                },
+                .infixExp => |infix| {
+                    const evalLeft = Eval(Ast.Node{ .expression = infix.left.* });
+                    const evalRight = Eval(Ast.Node{ .expression = infix.right.* });
+                    if (evalLeft) |left| {
+                        if (evalRight) |right| {
+                            return evalInfixExpression(infix.allocator, infix.operator, left, right);
+                        }
+                    }
                 },
                 else => {
                     return null;
@@ -47,7 +73,91 @@ pub fn Eval(node: Ast.Node) ?Object {
 
     return null;
 }
-// TODO: FIX this 8/22/2024
+
+fn nativeBooltoBoolean(input: bool) Object {
+    if (input) {
+        return TRUE;
+    }
+    return FALSE;
+}
+
+fn evalInfixExpression(allocator: Allocator, operator: []const u8, left: Object, right: Object) Object {
+    switch (left) {
+        .integer => |leftint| {
+            switch (right) {
+                .integer => |rightint| {
+                    return evalIntegerInfixExpression(allocator, operator, leftint, rightint);
+                },
+                else => return NULL,
+            }
+        },
+        else => return NULL,
+    }
+}
+
+fn evalPrefixExpression(allocator: Allocator, operator: []const u8, right: Object) Object {
+    const op = operator[0];
+    switch (op) {
+        '!' => {
+            return evalBangOperatorExpression(right);
+        },
+        '-' => {
+            return evalMinusPrefixOperatorExpression(allocator, right);
+        },
+        else => {
+            return NULL;
+        },
+    }
+}
+
+fn evalIntegerInfixExpression(allocator: Allocator, operator: []const u8, left: Object.Integer, right: Object.Integer) Object {
+    const leftval = left.value;
+    const rightval = right.value;
+
+    switch (operator[0]) {
+        '+' => return Object{
+            .integer = Object.Integer{ .allocator = allocator, .value = leftval + rightval },
+        },
+        '-' => return Object{
+            .integer = Object.Integer{ .allocator = allocator, .value = leftval - rightval },
+        },
+        '*' => return Object{
+            .integer = Object.Integer{ .allocator = allocator, .value = leftval * rightval },
+        },
+        '/' => return Object{
+            .integer = Object.Integer{ .allocator = allocator, .value = @divExact(leftval, rightval) },
+        },
+        else => {
+            return NULL;
+        },
+    }
+}
+
+fn evalMinusPrefixOperatorExpression(allocator: Allocator, right: Object) Object {
+    switch (right) {
+        .integer => {
+            const val = right.integer.value;
+            return Object{ .integer = Object.Integer{ .allocator = allocator, .value = -val } };
+        },
+        else => return NULL,
+    }
+}
+
+fn evalBangOperatorExpression(right: Object) Object {
+    switch (right) {
+        .boolean => |boo| {
+            if (boo.value == true) {
+                return FALSE;
+            }
+            return TRUE;
+        },
+        .nil => return FALSE,
+        else => {
+            return FALSE;
+        },
+    }
+}
+
 fn evalStatements(stmts: std.ArrayList(Ast.Statement)) Object {
     var result: Object = undefined;
     for (stmts.items) |value| {
@@ -56,7 +166,7 @@ fn evalStatements(stmts: std.ArrayList(Ast.Statement)) Object {
             switch (evaluated) {
                 .boolean => result = Object{ .boolean = evaluated.boolean },
                 .integer => result = Object{ .integer = evaluated.integer },
-                .nil => result = Object{ .nil = evaluated.nil },
+                .nil => result = NULL,
             }
         }
     }
@@ -73,26 +183,21 @@ test "TestEvalIntegerExpression" {
     const testTable = [_]TestStruct{
         TestStruct{ .expected = 5, .input = "5" },
         TestStruct{ .expected = 10, .input = "10" },
+        TestStruct{ .expected = -5, .input = "-5" },
+        TestStruct{ .expected = -10, .input = "-10" },
+        TestStruct{ .expected = -10, .input = "-10" },
+        // weird way but works for now
+        TestStruct{ .expected = -2, .input = "(-1) + -1" },
+        TestStruct{ .expected = 10, .input = "5 + 5 + 5 + 5 - 10" },
+        TestStruct{ .expected = 37, .input = "3 * (3 * 3) + 10" },
+        TestStruct{ .expected = 50, .input = "(5 + 10 * 2 + 15 / 3) * 2 + -10" },
     };
 
     for (testTable) |value| {
         const evaluated = testEval(allocator, value.input);
-        _ = testIntegerObject(evaluated, value.expected);
+        const result = testIntegerObject(evaluated, value.expected);
+        try std.testing.expect(result);
     }
-}
-
-fn testEval(allocator: Allocator, input: []const u8) Object {
-    var l = Lexer.init(allocator, input);
-    defer l.deinit();
-    var parser = Parser.init(allocator, l);
-    var program = parser.parseProgram();
-    defer parser.deinit();
-    defer program.deinit();
-
-    if (Eval(Ast.Node{ .program = program })) |eval| {
-        return eval;
-    }
-    return Object{ .nil = Object.Nil{} };
 }
 
 fn testIntegerObject(obj: Object, expected: i64) bool {
@@ -109,4 +214,74 @@ fn testIntegerObject(obj: Object, expected: i64) bool {
             return false;
         },
     }
+}
+
+fn testBooleanObject(obj: Object, expected: bool) bool {
+    switch (obj) {
+        .boolean => |boo| {
+            if (boo.value != expected) {
+                std.debug.print("\nobject has wrong value. got={any}, want {any}\n", .{ boo.value, expected });
+                return false;
+            }
+            return true;
+        },
+        else => {
+            std.debug.print("\nobject is not boolean got {any}\n", .{obj});
+            return false;
+        },
+    }
+}
+
+test "TestBangOperator" {
+    const allocator = std.testing.allocator;
+    const TestStruct = struct {
+        input: []const u8,
+        expected: bool,
+    };
+    const testTable = [_]TestStruct{
+        TestStruct{ .expected = false, .input = "!true" },
+        TestStruct{ .expected = true, .input = "!false" },
+        TestStruct{ .expected = false, .input = "!5" },
+        TestStruct{ .expected = true, .input = "!!true" },
+        TestStruct{ .expected = false, .input = "!!false" },
+        TestStruct{ .expected = true, .input = "!!5" },
+    };
+
+    for (testTable) |value| {
+        const evaluated = testEval(allocator, value.input);
+        const result = testBooleanObject(evaluated, value.expected);
+        try std.testing.expect(result);
+    }
+}
+
+test "TestEvalBooleanExpression" {
+    const allocator = std.testing.allocator;
+    const TestStruct = struct {
+        input: []const u8,
+        expected: bool,
+    };
+    const testTable = [_]TestStruct{
+        TestStruct{ .expected = true, .input = "true" },
+        TestStruct{ .expected = false, .input = "false" },
+    };
+
+    for (testTable) |value| {
+        const evaluated = testEval(allocator, value.input);
+        const result = testBooleanObject(evaluated, value.expected);
+        try std.testing.expect(result);
+    }
+}
+
+fn testEval(allocator: Allocator, input: []const u8) Object {
+    var l = Lexer.init(allocator, input);
+    defer l.deinit();
+    var parser = Parser.init(allocator, l);
+    var program = parser.parseProgram();
+    defer parser.deinit();
+    defer program.deinit();
+
+    if (Eval(Ast.Node{ .program = program })) |eval| {
+        return eval;
+    }
+    return Object{ .nil = Object.Nil{} };
 }
