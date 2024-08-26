@@ -91,7 +91,32 @@ fn evalInfixExpression(allocator: Allocator, operator: []const u8, left: Object,
                 else => return NULL,
             }
         },
+        .boolean => |leftbool| {
+            switch (right) {
+                .boolean => |rightbool| {
+                    return evalBooleanInfixExpression(operator, leftbool, rightbool);
+                },
+                else => return NULL,
+            }
+        },
         else => return NULL,
+    }
+}
+
+fn evalBooleanInfixExpression(operator: []const u8, left: Object.Boolean, right: Object.Boolean) Object {
+    const leftval = left.value;
+    const rightval = right.value;
+
+    switch (operator[0]) {
+        '=' => {
+            return nativeBooltoBoolean(leftval == rightval);
+        },
+        '!' => {
+            return nativeBooltoBoolean(leftval != rightval);
+        },
+        else => {
+            return NULL;
+        },
     }
 }
 
@@ -126,6 +151,18 @@ fn evalIntegerInfixExpression(allocator: Allocator, operator: []const u8, left: 
         },
         '/' => return Object{
             .integer = Object.Integer{ .allocator = allocator, .value = @divExact(leftval, rightval) },
+        },
+        '<' => {
+            return nativeBooltoBoolean(leftval < rightval);
+        },
+        '>' => {
+            return nativeBooltoBoolean(leftval > rightval);
+        },
+        '=' => {
+            return nativeBooltoBoolean(leftval == rightval);
+        },
+        '!' => {
+            return nativeBooltoBoolean(leftval != rightval);
         },
         else => {
             return NULL;
@@ -173,6 +210,29 @@ fn evalStatements(stmts: std.ArrayList(Ast.Statement)) Object {
 
     return result;
 }
+
+//TODO: Implement tests for the following functions
+
+// test "TestIfElseExpression" {
+//     const allocator = std.testing.allocator;
+//     const TestStruct = struct {
+//         input: []const u8,
+//         expected: Object,
+//     };
+//     const testTable = [_]TestStruct{
+//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (true) { 10 }" },
+//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (true) { 10 } else { 20 }" },
+//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 20 } }, .input = "if (false) { 10 } else { 20 }" },
+//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 20 } }, .input = "if (1) { 10 } else { 20 }" },
+//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (1 < 2) { 10 }" },
+//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (1 < 2) { 10 } else { 20 }" },
+//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 20 } }, .input = "if (1 > 2) { 10 } else { 20 }" },
+//     };
+
+//     for (testTable) |value| {
+//         const evaluated = testEval(allocator, value.input);
+//     }
+// }
 
 test "TestEvalIntegerExpression" {
     const allocator = std.testing.allocator;
@@ -263,6 +323,16 @@ test "TestEvalBooleanExpression" {
     const testTable = [_]TestStruct{
         TestStruct{ .expected = true, .input = "true" },
         TestStruct{ .expected = false, .input = "false" },
+        TestStruct{ .expected = true, .input = "1 < 2" },
+        TestStruct{ .expected = false, .input = "1 > 2" },
+        TestStruct{ .expected = false, .input = "1 == 2" },
+        TestStruct{ .expected = true, .input = "1 != 2" },
+        TestStruct{ .expected = true, .input = "true == true" },
+        TestStruct{ .expected = false, .input = "true == false" },
+        TestStruct{ .expected = false, .input = "true != true" },
+        TestStruct{ .expected = true, .input = "true != false" },
+        TestStruct{ .expected = false, .input = "(1 < 2) != true" },
+        TestStruct{ .expected = false, .input = "(1 > 2) == true" },
     };
 
     for (testTable) |value| {
