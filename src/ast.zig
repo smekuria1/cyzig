@@ -10,6 +10,7 @@ pub const Node = union(enum) {
     statement: Statement,
     expression: Expression,
     program: Program,
+    block: BlockStatement,
 };
 
 pub const Statement = union(enum) {

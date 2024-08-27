@@ -10,6 +10,7 @@ const NULL = Object{ .nil = Object.Nil{} };
 const TRUE = Object{ .boolean = Object.Boolean{ .value = true } };
 const FALSE = Object{ .boolean = Object.Boolean{ .value = false } };
 
+// TODO: Stopped here 8/27clear
 pub fn Eval(node: Ast.Node) ?Object {
     switch (node) {
         .expression => |exp| {
@@ -42,6 +43,9 @@ pub fn Eval(node: Ast.Node) ?Object {
                         }
                     }
                 },
+                .ifexp => |ifexpr| {
+                    return evalIfExpression(ifexpr);
+                },
                 else => {
                     return null;
                 },
@@ -68,6 +72,9 @@ pub fn Eval(node: Ast.Node) ?Object {
         },
         .program => |prog| {
             return evalStatements(prog.statements);
+        },
+        .block => |block| {
+            return evalStatements(block.statements);
         },
     }
 
@@ -100,6 +107,38 @@ fn evalInfixExpression(allocator: Allocator, operator: []const u8, left: Object,
             }
         },
         else => return NULL,
+    }
+}
+
+fn evalIfExpression(ifexpr: Ast.IfExpression) Object {
+    const condition = Eval(Ast.Node{ .expression = ifexpr.condition.* });
+    if (condition) |cond| {
+        if (isTruthy(cond)) {
+            if (ifexpr.consequence) |consq| {
+                const evaluated = Eval(Ast.Node{ .block = consq });
+                if (evaluated) |eval| {
+                    return eval;
+                }
+            }
+        } else if (ifexpr.alternative) |alt| {
+            const evaluated = Eval(Ast.Node{ .block = alt });
+            if (evaluated) |eval| {
+                return eval;
+            }
+        }
+    } else {
+        return NULL;
+    }
+    return NULL;
+}
+
+fn isTruthy(obj: Object) bool {
+    switch (obj) {
+        .nil => return false,
+        .boolean => |boo| {
+            return boo.value;
+        },
+        else => return true,
     }
 }
 
@@ -213,26 +252,58 @@ fn evalStatements(stmts: std.ArrayList(Ast.Statement)) Object {
 
 //TODO: Implement tests for the following functions
 
-// test "TestIfElseExpression" {
-//     const allocator = std.testing.allocator;
-//     const TestStruct = struct {
-//         input: []const u8,
-//         expected: Object,
-//     };
-//     const testTable = [_]TestStruct{
-//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (true) { 10 }" },
-//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (true) { 10 } else { 20 }" },
-//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 20 } }, .input = "if (false) { 10 } else { 20 }" },
-//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 20 } }, .input = "if (1) { 10 } else { 20 }" },
-//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (1 < 2) { 10 }" },
-//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (1 < 2) { 10 } else { 20 }" },
-//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 20 } }, .input = "if (1 > 2) { 10 } else { 20 }" },
-//     };
+test "TestIfElseExpression" {
+    const allocator = std.testing.allocator;
+    const TestStruct = struct {
+        input: []const u8,
+        expected: Object,
+    };
+    const testTable = [_]TestStruct{
+        TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (true) { 10 }" },
+        TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (true) { 10 } else { 20 }" },
+        TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 20 } }, .input = "if (false) { 10 } else { 20 }" },
+        TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (1) { 10 } else { 20 }" },
+        TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (1 < 2) { 10 }" },
+        TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (1 < 2) { 10 } else { 20 }" },
+        TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 20 } }, .input = "if (1 > 2) { 10 } else { 20 }" },
+        TestStruct{ .expected = NULL, .input = "if (false) { 10 }" },
+    };
+    var passTest = true;
+    for (testTable) |value| {
+        const evaluated = testEval(allocator, value.input);
+        switch (value.expected) {
+            .integer => {
+                const result = testIntegerObject(evaluated, value.expected.integer.value);
+                if (passTest) {
+                    passTest = result;
+                }
+            },
+            .boolean => {
+                const result = testBooleanObject(evaluated, value.expected.boolean.value);
+                if (passTest) {
+                    passTest = result;
+                }
+            },
+            .nil => {
+                const result = testNullObject(evaluated);
+                if (passTest) {
+                    passTest = result;
+                }
+            },
+        }
+    }
+    try std.testing.expect(passTest);
+}
 
-//     for (testTable) |value| {
-//         const evaluated = testEval(allocator, value.input);
-//     }
-// }
+fn testNullObject(obj: Object) bool {
+    switch (obj) {
+        .nil => return true,
+        else => {
+            std.debug.print("\nobject is not NULL got {any}\n", .{obj});
+            return false;
+        },
+    }
+}
 
 test "TestEvalIntegerExpression" {
     const allocator = std.testing.allocator;

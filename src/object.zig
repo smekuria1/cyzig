@@ -1,15 +1,12 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 
-pub const ObjectType = enum([]const u8) {
-    INTEGER_OBJ = "INTEGER",
-    BOOLEAN_OBJ = "BOOLEAN",
-    NULL_OBJ = "NULL",
-};
+pub const ObjectType = enum([]const u8) { INTEGER_OBJ = "INTEGER", BOOLEAN_OBJ = "BOOLEAN", NULL_OBJ = "NULL", RETURN_OBJ = "RETURN_VALUE" };
 
 pub const Object = union(enum) {
     integer: Integer,
     boolean: Boolean,
+    returnval: ReturnValue,
     nil: Nil,
     pub const Integer = struct {
         allocator: Allocator,
@@ -22,6 +19,28 @@ pub const Object = union(enum) {
         pub fn oType(self: Integer) ObjectType {
             _ = self;
             return ObjectType.INTEGER_OBJ;
+        }
+    };
+
+    pub const ReturnValue = struct {
+        allocator:Allocator,
+        value : Object,
+
+        pub fn inspect(self: ReturnValue) ![]const u8 {
+            switch (self.value) {
+                .boolean => |boo| {
+                    return boo.inspect();
+                },
+                .integer => |int| {
+                    return int.inspect();
+                },
+                .nil => |n| {
+                    return n.inspect();
+                },
+                else => {
+                    unreachable;
+                }
+            }
         }
     };
 
@@ -40,6 +59,8 @@ pub const Object = union(enum) {
             return ObjectType.BOOLEAN_OBJ;
         }
     };
+
+
 
     pub const Nil = struct {
         pub fn inspect(self: Nil) []const u8 {
