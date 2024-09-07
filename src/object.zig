@@ -23,11 +23,11 @@ pub const Object = union(enum) {
     };
 
     pub const ReturnValue = struct {
-        allocator:Allocator,
-        value : Object,
+        allocator: Allocator,
+        value: *Object,
 
         pub fn inspect(self: ReturnValue) ![]const u8 {
-            switch (self.value) {
+            switch (self.value.*) {
                 .boolean => |boo| {
                     return boo.inspect();
                 },
@@ -39,7 +39,7 @@ pub const Object = union(enum) {
                 },
                 else => {
                     unreachable;
-                }
+                },
             }
         }
     };
@@ -59,8 +59,6 @@ pub const Object = union(enum) {
             return ObjectType.BOOLEAN_OBJ;
         }
     };
-
-
 
     pub const Nil = struct {
         pub fn inspect(self: Nil) []const u8 {

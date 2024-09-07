@@ -4,6 +4,7 @@ const Token = @import("./token.zig").Token;
 const TokenType = @import("./token.zig").TokenType;
 const print = std.debug.print;
 const Allocator = std.mem.Allocator;
+const Pretty = @import("./pretty.zig");
 
 pub const Node = union(enum) {
     const self = @This();
@@ -268,6 +269,9 @@ pub const Expression = union(enum) {
                         switch (value) {
                             .expression => |exp| {
                                 exp.expression.?.deinit(allocator);
+                            },
+                            .returnStatement => |ret| {
+                                ret.returnValue.?.deinit(allocator);
                             },
                             else => {},
                         }

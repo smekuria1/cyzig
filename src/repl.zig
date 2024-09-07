@@ -39,6 +39,10 @@ pub fn start(allocator: std.mem.Allocator) !void {
                         const intStr = try int.inspect();
                         std.debug.print("{s}\n", .{intStr});
                     },
+                    .returnval => |ret| {
+                        const retstr = try ret.inspect();
+                        std.debug.print("{s}\n", .{retstr});
+                    },
                     .nil => |NULL| {
                         std.debug.print("{s}\n", .{NULL.inspect()});
                     },
