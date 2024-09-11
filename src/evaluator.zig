@@ -364,9 +364,9 @@ test "TestReturnStatements" {
             .expected = 10,
             .input =
             \\ if(1999>200) {
-            \\if (120 > 21) {
-            \\return 10;
-            \\}
+            \\
+            \\if (120 > 21) {return 10} else {return 200}
+            \\
             \\return 1;
             \\}
             ,

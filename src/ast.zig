@@ -268,10 +268,14 @@ pub const Expression = union(enum) {
                     for (con.statements.items) |value| {
                         switch (value) {
                             .expression => |exp| {
-                                exp.expression.?.deinit(allocator);
+                                if (exp.expression) |expr| {
+                                    expr.deinit(allocator);
+                                }
                             },
                             .returnStatement => |ret| {
-                                ret.returnValue.?.deinit(allocator);
+                                if (ret.returnValue) |retval| {
+                                    retval.deinit(allocator);
+                                }
                             },
                             else => {},
                         }
