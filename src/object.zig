@@ -1,5 +1,6 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const Ast = @import("./ast.zig");
 
 pub const ObjectType = enum([]const u8) { INTEGER_OBJ = "INTEGER", BOOLEAN_OBJ = "BOOLEAN", NULL_OBJ = "NULL", RETURN_OBJ = "RETURN_VALUE" };
 
@@ -9,6 +10,7 @@ pub const Object = union(enum) {
     returnval: ReturnValue,
     nil: Nil,
     pub const Integer = struct {
+        stop: bool = false,
         allocator: Allocator,
         value: i64,
 
@@ -25,6 +27,7 @@ pub const Object = union(enum) {
     pub const ReturnValue = struct {
         allocator: Allocator,
         value: *Object,
+        stop: bool = false,
 
         pub fn inspect(self: ReturnValue) ![]const u8 {
             switch (self.value.*) {
@@ -46,6 +49,7 @@ pub const Object = union(enum) {
 
     pub const Boolean = struct {
         value: bool,
+        stop: bool = false,
 
         pub fn inspect(self: Boolean) ![]const u8 {
             if (self.value == true) {
@@ -61,6 +65,7 @@ pub const Object = union(enum) {
     };
 
     pub const Nil = struct {
+        stop: bool = false,
         pub fn inspect(self: Nil) []const u8 {
             _ = self;
             return "nil";

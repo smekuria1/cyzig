@@ -265,6 +265,13 @@ fn evalBlockStatements(block: Ast.BlockStatement) Object {
                     const evaluated = Eval(Ast.Node{ .expression = exp.* });
                     if (evaluated) |ev| {
                         result = ev;
+                        switch (ev) {
+                            inline else => |case| {
+                                if (case.stop == true) {
+                                    return result;
+                                }
+                            },
+                        }
                     }
                 }
             },
@@ -282,6 +289,8 @@ fn evalBlockStatements(block: Ast.BlockStatement) Object {
                     const evaluated = Eval(Ast.Node{ .statement = Ast.Statement{ .returnStatement = ret } });
                     if (evaluated) |ev| {
                         result = ev;
+                        result.integer.stop = true;
+                        // TODO: Fix this to include all
                         return result;
                     }
                 }

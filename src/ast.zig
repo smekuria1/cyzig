@@ -277,7 +277,9 @@ pub const Expression = union(enum) {
                                     retval.deinit(allocator);
                                 }
                             },
-                            else => {},
+                            else => {
+                                std.debug.print("Ifexp block statement not being cleaned", .{});
+                            },
                         }
                     }
                     con.statements.deinit();
@@ -287,8 +289,18 @@ pub const Expression = union(enum) {
                         switch (value) {
                             .expression => |exp| {
                                 exp.expression.?.deinit(allocator);
+                                if (exp.expression) |expr| {
+                                    expr.deinit(allocator);
+                                }
                             },
-                            else => {},
+                            .returnStatement => |ret| {
+                                if (ret.returnValue) |retval| {
+                                    retval.deinit(allocator);
+                                }
+                            },
+                            else => |case| {
+                                std.debug.print("ifexp alternative not being cleaned {any}", .{case});
+                            },
                         }
                     }
                     alt.statements.deinit();
