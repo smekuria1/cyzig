@@ -7,11 +7,12 @@ const max_length = 1024;
 const pretty = @import("./pretty.zig");
 const Evaluator = @import("./evaluator.zig");
 const Ast = @import("./ast.zig");
-
+const Env = @import("./environment.zig").Environment;
 pub fn start(allocator: std.mem.Allocator) !void {
     const stdin = std.io.getStdIn().reader();
 
     const buffer = try allocator.alloc(u8, 1024);
+    const env = try Env.init(allocator);
     while (true) {
         std.debug.print("\n--> ", .{});
         if (try stdin.readUntilDelimiterOrEof(buffer[0..], '\n')) |value| {
@@ -28,7 +29,8 @@ pub fn start(allocator: std.mem.Allocator) !void {
             // try pretty.print(allocator, program.statements.items[0], .{  });
             const stringer = try program.string();
             // std.debug.print("{s}", .{stringer.items});
-            const evaluated = Evaluator.Eval(Ast.Node{ .program = program });
+            const evaluated = Evaluator.Eval(Ast.Node{ .program = program }, env);
+
             if (evaluated) |ev| {
                 switch (ev) {
                     .boolean => |boo| {
@@ -46,13 +48,19 @@ pub fn start(allocator: std.mem.Allocator) !void {
                     .nil => |NULL| {
                         std.debug.print("{s}\n", .{NULL.inspect()});
                     },
+                    .eror => |err| {
+                        std.debug.print("Repl ERROR {s}", .{err.inspect()});
+                    },
                 }
             }
+            // try pretty.print(allocator, env.store, .{ .max_depth = 30 });
+            // std.debug.print("\n {any} \n", .{env.store.get("a")});
             defer lexer.deinit();
             defer parser.deinit();
             defer stringer.deinit();
         }
     }
+    defer env.deinit(allocator);
 }
 
 fn printParseErrors(errors: std.ArrayList([]const u8)) void {

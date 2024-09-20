@@ -2,13 +2,20 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Ast = @import("./ast.zig");
 
-pub const ObjectType = enum([]const u8) { INTEGER_OBJ = "INTEGER", BOOLEAN_OBJ = "BOOLEAN", NULL_OBJ = "NULL", RETURN_OBJ = "RETURN_VALUE" };
+pub const ObjectType = enum(u8) {
+    INTEGER_OBJ,
+    BOOLEAN_OBJ,
+    NULL_OBJ,
+    RETURN_OBJ,
+    ERROR_OBJ,
+};
 
 pub const Object = union(enum) {
     integer: Integer,
     boolean: Boolean,
     returnval: ReturnValue,
     nil: Nil,
+    eror: Error,
     pub const Integer = struct {
         stop: bool = false,
         allocator: Allocator,
@@ -21,6 +28,18 @@ pub const Object = union(enum) {
         pub fn oType(self: Integer) ObjectType {
             _ = self;
             return ObjectType.INTEGER_OBJ;
+        }
+    };
+
+    pub const Error = struct {
+        message: []const u8,
+        stop: bool = true,
+        pub fn inspect(self: Error) []const u8 {
+            var count: usize = 0;
+            while (self.message[count] != 170) {
+                count += 1;
+            }
+            return self.message[0..count];
         }
     };
 

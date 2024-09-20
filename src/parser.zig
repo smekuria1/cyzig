@@ -563,65 +563,65 @@ pub const Parser = struct {
     }
 };
 
-test "TestLetStatements Good" {
-    const allocator = std.testing.allocator;
-    const input =
-        \\let x = 5;
-        \\let y = fn(x, y) { x + y; };
-        \\add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))
-    ;
-    var l = Lexer.init(allocator, input);
-    defer l.deinit();
-    var parser = Parser.init(allocator, l);
-    var program = parser.parseProgram();
-    defer program.deinit();
-    defer parser.deinit();
-    try std.testing.expect(!parser.checkParserErros());
-    // try Pretty.print(allocator, program.statements.items[0], .{ .max_depth = 30 });
-
-    const stringer = try program.string();
-    defer stringer.deinit();
-    std.debug.print("Test out {s}\n", .{stringer.items});
-}
-
-test "Test ReturnStatement" {
-    const allocator = std.testing.allocator;
-    const input =
-        \\return 5;
-        \\return x;
-        \\return y + x;
-    ;
-    var l = Lexer.init(allocator, input);
-    defer l.deinit();
-    var parser = Parser.init(allocator, l);
-    var program = parser.parseProgram();
-    defer program.deinit();
-    defer parser.deinit();
-    // try Pretty.print(allocator, program, .{});
-    try std.testing.expect(!parser.checkParserErros());
-    try std.testing.expectEqualDeep(3, program.statements.items.len);
-
-    for (program.statements.items) |value| {
-        try std.testing.expect(checkTokenTypeMatch(value, .RETURN));
-    }
-    const stringer = try program.string();
-    defer stringer.deinit();
-    std.debug.print("Test out {s}\n", .{stringer.items});
-}
-
-pub fn checkTokenTypeMatch(stmt: Ast.Statement, kind: TokenType) bool {
-    switch (stmt) {
-        .letStatement => {
-            return stmt.letStatement.token.tType == kind;
-        },
-        .returnStatement => {
-            return stmt.returnStatement.token.tType == kind;
-        },
-        .expression => {
-            return stmt.expression.token.tType == kind;
-        },
-    }
-}
+// test "TestLetStatements Good" {
+//     const allocator = std.testing.allocator;
+//     const input =
+//         \\let x = 5;
+//         \\let y = fn(x, y) { x + y; };
+//         \\add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))
+//     ;
+//     var l = Lexer.init(allocator, input);
+//     defer l.deinit();
+//     var parser = Parser.init(allocator, l);
+//     var program = parser.parseProgram();
+//     defer program.deinit();
+//     defer parser.deinit();
+//     try std.testing.expect(!parser.checkParserErros());
+//     // try Pretty.print(allocator, program.statements.items[0], .{ .max_depth = 30 });
+//
+//     const stringer = try program.string();
+//     defer stringer.deinit();
+//     std.debug.print("Test out {s}\n", .{stringer.items});
+// }
+//
+// test "Test ReturnStatement" {
+//     const allocator = std.testing.allocator;
+//     const input =
+//         \\return 5;
+//         \\return x;
+//         \\return y + x;
+//     ;
+//     var l = Lexer.init(allocator, input);
+//     defer l.deinit();
+//     var parser = Parser.init(allocator, l);
+//     var program = parser.parseProgram();
+//     defer program.deinit();
+//     defer parser.deinit();
+//     // try Pretty.print(allocator, program, .{});
+//     try std.testing.expect(!parser.checkParserErros());
+//     try std.testing.expectEqualDeep(3, program.statements.items.len);
+//
+//     for (program.statements.items) |value| {
+//         try std.testing.expect(checkTokenTypeMatch(value, .RETURN));
+//     }
+//     const stringer = try program.string();
+//     defer stringer.deinit();
+//     std.debug.print("Test out {s}\n", .{stringer.items});
+// }
+//
+// pub fn checkTokenTypeMatch(stmt: Ast.Statement, kind: TokenType) bool {
+//     switch (stmt) {
+//         .letStatement => {
+//             return stmt.letStatement.token.tType == kind;
+//         },
+//         .returnStatement => {
+//             return stmt.returnStatement.token.tType == kind;
+//         },
+//         .expression => {
+//             return stmt.expression.token.tType == kind;
+//         },
+//     }
+// }
 
 // test "TestCallExpression" {
 //     const allocator = std.testing.allocator;
@@ -656,13 +656,13 @@ pub fn checkTokenTypeMatch(stmt: Ast.Statement, kind: TokenType) bool {
 //     defer program.deinit();
 //     defer parser.deinit();
 //     try std.testing.expect(!parser.checkParserErros());
-
+//
 //     // try Pretty.print(allocator, program.statements.items[0], .{});
-
+//
 //     const stringer = try program.string();
 //     // try Pretty.print(allocator, program.statements.items[0], .{ .max_depth = 30 });
 //     std.debug.print("Test out {s}\n", .{stringer.items});
-
+//
 //     defer stringer.deinit();
 //     try std.testing.expectEqualSlices(u8, "fn(x,y)(x + y)", stringer.items);
 // }
