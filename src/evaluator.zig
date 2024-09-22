@@ -75,8 +75,8 @@ pub fn Eval(node: Ast.Node, environment: *Environment) ?Object {
                     if (let.value) |exp| {
                         //std.debug.print("\n{any}\n", .{exp});
                         const obj = Eval(Ast.Node{ .expression = exp.* }, environment);
-                        // std.debug.print("let.name in eval {s}\n", .{let.name.value});
-                        environment.store.put(let.name.value, obj.?) catch unreachable;
+                        // std.debug.print("let.name in statement eval {s}\n", .{let.name.value});
+                        environment.put(let.name.value, obj.?);
                         // std.debug.print("After put statement Store {any} \n", .{environment.store.get(let.name.value).?});
                         return obj;
                     }
@@ -115,8 +115,8 @@ fn nativeBooltoBoolean(input: bool) Object {
     return FALSE;
 }
 fn evalIdentifierExpression(ident: Ast.Identifier, environment: *Environment) Object {
-    std.debug.print("Ident value in eval ident {s}\n", .{ident.value});
-    if (environment.store.get(ident.value)) |val| {
+    // std.debug.print("Ident value in eval ident {s}\n", .{ident.value});
+    if (environment.get(ident.value)) |val| {
         return val;
     }
     var buf: [32]u8 = undefined;
@@ -501,7 +501,12 @@ test "TestLetStatements" {
     };
 
     const testTable = [_]TestStruct{
-        TestStruct{ .expected = 5, .input = "let a = 5; a;" },
+        TestStruct{ .expected = 200, .input = 
+        \\let a = 5;
+        \\a;
+        \\let b = 200
+        \\b;
+        },
     };
 
     for (testTable) |value| {

@@ -28,7 +28,7 @@ pub fn start(allocator: std.mem.Allocator) !void {
             // TODO: Work out a way to visualize the AST as a tree.
             // try pretty.print(allocator, program.statements.items[0], .{  });
             const stringer = try program.string();
-            // std.debug.print("{s}", .{stringer.items});
+            std.debug.print("{s}", .{stringer.items});
             const evaluated = Evaluator.Eval(Ast.Node{ .program = program }, env);
 
             if (evaluated) |ev| {
@@ -53,6 +53,7 @@ pub fn start(allocator: std.mem.Allocator) !void {
                     },
                 }
             }
+            // env.printEnvironment();
             // try pretty.print(allocator, env.store, .{ .max_depth = 30 });
             // std.debug.print("\n {any} \n", .{env.store.get("a")});
             defer lexer.deinit();
