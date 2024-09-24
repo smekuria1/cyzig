@@ -419,6 +419,7 @@ fn testEval(allocator: Allocator, input: []const u8) Object {
     defer program.deinit();
     var env = Environment.init(allocator) catch unreachable;
     defer env.deinit(allocator);
+    // Pretty.print(allocator, program.statements.items, .{ .max_depth = 100 }) catch unreachable;
     if (Eval(Ast.Node{ .program = program }, env)) |eval| {
         return eval;
     }
@@ -501,11 +502,16 @@ test "TestLetStatements" {
     };
 
     const testTable = [_]TestStruct{
-        TestStruct{ .expected = 200, .input = 
+        TestStruct{ .expected = 5, .input = 
         \\let a = 5;
+        \\let b = a > 3;
         \\a;
-        \\let b = 200
-        \\b;
+        \\let c = a * 99;
+        \\ if (true) {let p = 20;} else {1};
+        \\ let d = if (c>a) {99} else {100};
+        \\d;
+        \\ d * c * a;
+        \\a;
         },
     };
 
@@ -639,4 +645,5 @@ test "TestLetStatements" {
 //         const result = testBooleanObject(evaluated, value.expected);
 //         try std.testing.expect(result);
 //     }
+//
 // }

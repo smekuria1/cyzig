@@ -251,6 +251,8 @@ pub const Expression = union(enum) {
                 return allocator.destroy(self);
             },
             .prefixExp => |pf| {
+                // Pretty.print(allocator, self, .{ .max_depth = 40 }) catch unreachable;
+                std.debug.print("Self in deinit {any} \n", .{self});
                 pf.right.deinit(allocator);
                 return allocator.destroy(self);
             },
@@ -277,8 +279,10 @@ pub const Expression = union(enum) {
                                     retval.deinit(allocator);
                                 }
                             },
-                            else => {
-                                std.debug.print("Ifexp block statement not being cleaned", .{});
+                            .letStatement => |let| {
+                                if (let.value) |letval| {
+                                    letval.deinit(allocator);
+                                }
                             },
                         }
                     }
@@ -288,7 +292,6 @@ pub const Expression = union(enum) {
                     for (alt.statements.items) |value| {
                         switch (value) {
                             .expression => |exp| {
-                                exp.expression.?.deinit(allocator);
                                 if (exp.expression) |expr| {
                                     expr.deinit(allocator);
                                 }
