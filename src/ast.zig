@@ -252,7 +252,7 @@ pub const Expression = union(enum) {
             },
             .prefixExp => |pf| {
                 // Pretty.print(allocator, self, .{ .max_depth = 40 }) catch unreachable;
-                std.debug.print("Self in deinit {any} \n", .{self});
+                // std.debug.print("Self in deinit {any} \n", .{self});
                 pf.right.deinit(allocator);
                 return allocator.destroy(self);
             },

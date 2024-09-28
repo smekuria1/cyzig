@@ -1,6 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Ast = @import("./ast.zig");
+const Enviornment = @import("./environment.zig").Environment;
 
 pub const ObjectType = enum(u8) {
     INTEGER_OBJ,
@@ -8,6 +9,7 @@ pub const ObjectType = enum(u8) {
     NULL_OBJ,
     RETURN_OBJ,
     ERROR_OBJ,
+    FUNCTION_OBJ,
 };
 
 pub const Object = union(enum) {
@@ -16,6 +18,43 @@ pub const Object = union(enum) {
     returnval: ReturnValue,
     nil: Nil,
     eror: Error,
+    function: Function,
+
+    pub const Function = struct {
+        enviornment: *Enviornment,
+        parameters: ?std.ArrayList(Ast.Identifier),
+        body: ?Ast.BlockStatement,
+        allocatorr: Allocator,
+        stop: bool = false,
+
+        pub fn inspect(self: Function) Allocator.Error![]u8 {
+            var list = std.ArrayList(u8).init(self.allocatorr);
+            var paramlist = std.ArrayList([]const u8).init(self.allocatorr);
+            defer paramlist.deinit();
+
+            for (0.., self.parameters.?.items) |i, value| {
+                paramlist.append(value.string()) catch unreachable;
+                if (i >= self.parameters.?.items.len - 1) {
+                    continue;
+                }
+                paramlist.append(",") catch unreachable;
+            }
+            _ = list.writer().write("fn") catch unreachable;
+            _ = list.writer().write("(") catch unreachable;
+            const commalist = paramlist.toOwnedSlice() catch unreachable;
+            for (commalist) |value| {
+                _ = list.writer().write(value) catch unreachable;
+            }
+            self.allocatorr.free(commalist);
+            _ = list.writer().write(") {") catch unreachable;
+            const bodystring = self.body.?.string() catch unreachable;
+            _ = list.writer().write(bodystring) catch unreachable;
+            self.allocatorr.free(bodystring);
+            _ = list.writer().write("}") catch unreachable;
+            return list.toOwnedSlice();
+        }
+    };
+
     pub const Integer = struct {
         stop: bool = false,
         allocator: Allocator,
@@ -36,7 +75,7 @@ pub const Object = union(enum) {
         stop: bool = true,
         pub fn inspect(self: Error) []const u8 {
             var count: usize = 0;
-            while (self.message[count] != 170) {
+            while (self.message[count] != 170 and count <= self.message.len) {
                 count += 1;
             }
             return self.message[0..count];

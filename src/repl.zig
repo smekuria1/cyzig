@@ -51,6 +51,11 @@ pub fn start(allocator: std.mem.Allocator) !void {
                     .eror => |err| {
                         std.debug.print("Repl ERROR {s}", .{err.inspect()});
                     },
+                    .function => |fun| {
+                        const funstring = fun.inspect() catch unreachable;
+                        std.debug.print("{s}\n", .{funstring});
+                        allocator.free(funstring);
+                    },
                 }
             }
             // env.printEnvironment();
