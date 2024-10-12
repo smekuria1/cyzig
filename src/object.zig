@@ -74,11 +74,7 @@ pub const Object = union(enum) {
         message: []const u8,
         stop: bool = true,
         pub fn inspect(self: Error) []const u8 {
-            var count: usize = 0;
-            while (self.message[count] != 170 and count <= self.message.len) {
-                count += 1;
-            }
-            return self.message[0..count];
+            return self.message;
         }
     };
 
@@ -89,19 +85,15 @@ pub const Object = union(enum) {
 
         pub fn inspect(self: ReturnValue) ![]const u8 {
             switch (self.value.*) {
-                .boolean => |boo| {
-                    return boo.inspect();
-                },
-                .integer => |int| {
-                    return int.inspect();
-                },
-                .nil => |n| {
-                    return n.inspect();
-                },
-                else => {
-                    unreachable;
+                inline else => |case| {
+                    return case.inspect();
                 },
             }
+        }
+
+        pub fn oType(self: ReturnValue) ObjectType {
+            _ = self;
+            return ObjectType.RETURN_OBJ;
         }
     };
 

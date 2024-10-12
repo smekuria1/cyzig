@@ -239,7 +239,12 @@ pub const Parser = struct {
             .arguments = null,
         };
 
-        expression.arguments = self.parseCallArguments().?;
+        // expression.arguments = self.parseCallArguments().?;
+        if (self.parseCallArguments()) |args| {
+            expression.arguments = args;
+        } else {
+            expression.arguments = null;
+        }
         const exp = Ast.Expression.init(self.allocator);
         exp.* = Ast.Expression{
             .callExpression = expression,

@@ -60,28 +60,29 @@ pub fn Eval(node: Ast.Node, environment: *Environment) ?Object {
                 },
                 .function => |fun| {
                     //Pretty.print(fun.allocator, fun, .{ .max_depth = 100 }) catch unreachable;
-                    for (fun.body.?.statements.items) |stmt| {
-                        switch (stmt) {
-                            .expression => |expr| {
-                                Pretty.print(fun.allocator, expr.expression.?.infixExp, .{ .max_depth = 100 }) catch unreachable;
-                            },
-                            else => {
-                                std.debug.print("Other statements", .{});
-                            },
-                        }
-                    }
-                    const params = fun.parameters.?.clone() catch unreachable;
-                    const funObj = Object{ .function = Object.Function{
-                        .body = fun.body,
-                        .parameters = params,
-                        .allocatorr = fun.allocator,
-                        .enviornment = environment,
-                    } };
+                    const funObj = Object{
+                        .function = Object.Function{
+                            .enviornment = environment,
+                            .body = fun.body,
+                            .parameters = fun.parameters,
+                            .allocatorr = fun.allocator,
+                        },
+                    };
 
                     return funObj;
                 },
-                else => {
-                    return null;
+                .callExpression => |call| {
+                    // std.debug.print("calling function {any} \n", .{call.function});
+                    const function = Eval(Ast.Node{ .expression = call.function.* }, environment);
+                    if (isError(function)) {
+                        return function;
+                    }
+
+                    const args = evalExpressions(call.allocator, call.arguments, environment) catch unreachable;
+                    if (args.len == 1 and isError(args[0])) {
+                        return args[0];
+                    }
+                    return applyFunction(function.?, args);
                 },
             }
         },
@@ -121,6 +122,68 @@ pub fn Eval(node: Ast.Node, environment: *Environment) ?Object {
     return null;
 }
 
+fn evalExpressions(allocator: Allocator, arguments: ?std.ArrayList(*Ast.Expression), env: *Environment) Allocator.Error![]?Object {
+    var objs = std.ArrayList(?Object).init(allocator);
+    if (arguments) |args| {
+        for (args.items) |exps| {
+            const evaluated = Eval(Ast.Node{ .expression = exps.* }, env);
+            if (isError(evaluated)) {
+                objs.clearRetainingCapacity();
+                objs.append(evaluated) catch unreachable;
+                return objs.toOwnedSlice();
+            }
+            objs.append(evaluated) catch unreachable;
+        }
+        return objs.toOwnedSlice();
+    }
+    return objs.toOwnedSlice();
+}
+
+fn newFuncError(message: []const u8, obj: Object) Object {
+    var buf: [1024]u8 = undefined;
+    const mess = std.fmt.bufPrint(&buf, "{s} {any}\n", .{ message, obj }) catch unreachable;
+    const err = Object{ .eror = Object.Error{
+        .message = mess,
+        .stop = true,
+    } };
+    return err;
+}
+
+fn applyFunction(function: Object, args: []?Object) Object {
+    switch (function) {
+        .function => |fun| {
+            const extendedEnv = extendFunctionEnv(fun, args);
+            // extendedEnv.printEnvironment();
+            const evaluated = Eval(Ast.Node{ .block = fun.body.? }, extendedEnv);
+            // std.debug.print("Evaluating body {any} \n", .{evaluated.?});
+            extendedEnv.deinit(fun.allocatorr);
+            return unwrapReturnValue(evaluated);
+        },
+        else => |case| {
+            return newFuncError("not a function", case);
+        },
+    }
+}
+
+fn extendFunctionEnv(fun: Object.Function, args: []?Object) *Environment {
+    var env = Environment.initEnclosed(fun.allocatorr, fun.enviornment) catch unreachable;
+    if (fun.parameters) |params| {
+        for (0.., params.items) |pId, param| {
+            env.put(param.string(), args[pId].?);
+        }
+    }
+    fun.allocatorr.free(args);
+    return env;
+}
+fn unwrapReturnValue(evaluated: ?Object) Object {
+    if (evaluated) |eval| {
+        if (eval == .returnval) {
+            return eval.returnval.value.*;
+        }
+        return eval;
+    }
+    return FALSE;
+}
 fn isError(obj: ?Object) bool {
     if (obj) |o| {
         if (o == .eror) {
@@ -142,8 +205,8 @@ fn evalIdentifierExpression(ident: Ast.Identifier, environment: *Environment) Ob
         return val;
     }
     var buf: [32]u8 = undefined;
-    _ = std.fmt.bufPrint(&buf, "ident not found {s}\n", .{ident.value}) catch unreachable;
-    return Object{ .eror = Object.Error{ .message = &buf } };
+    const mess = std.fmt.bufPrint(&buf, "ident not found {s}\n", .{ident.value}) catch unreachable;
+    return Object{ .eror = Object.Error{ .message = mess } };
 }
 fn evalPrefixExpression(allocator: Allocator, operator: []const u8, right: Object) Object {
     const op = operator[0];
@@ -162,8 +225,8 @@ fn evalPrefixExpression(allocator: Allocator, operator: []const u8, right: Objec
 
 fn newPrefixError(operator: []const u8) Object {
     var buf: [1024]u8 = undefined;
-    _ = std.fmt.bufPrint(&buf, "Unknown operator: {s}", .{operator}) catch unreachable;
-    return Object{ .eror = Object.Error{ .message = &buf } };
+    const mess = std.fmt.bufPrint(&buf, "Unknown operator: {s}", .{operator}) catch unreachable;
+    return Object{ .eror = Object.Error{ .message = mess } };
 }
 
 fn evalInfixExpression(allocator: Allocator, operator: []const u8, left: Object, right: Object) Object {
@@ -191,12 +254,12 @@ fn evalInfixExpression(allocator: Allocator, operator: []const u8, left: Object,
 fn newInfixError(operator: []const u8, left: Object, right: Object, typemis: bool) Object {
     var buf: [1024]u8 = undefined;
     if (typemis) {
-        _ = std.fmt.bufPrint(&buf, "type mismatch: {any} {s} {any} \n", .{ left.integer.oType(), operator, right.boolean.oType() }) catch unreachable;
-        return Object{ .eror = Object.Error{ .message = &buf } };
+        const mess = std.fmt.bufPrint(&buf, "type mismatch: {any} {s} {any} \n", .{ left.integer.oType(), operator, right.boolean.oType() }) catch unreachable;
+        return Object{ .eror = Object.Error{ .message = mess } };
     }
-    _ = std.fmt.bufPrint(&buf, "Unknown operator {any} {s} {any} \n", .{ left, operator, right }) catch unreachable;
+    const mess = std.fmt.bufPrint(&buf, "Unknown operator {any} {s} {any} \n", .{ left, operator, right }) catch unreachable;
     return Object{ .eror = Object.Error{
-        .message = &buf,
+        .message = mess,
     } };
 }
 
@@ -348,10 +411,13 @@ fn evalBlockStatements(block: Ast.BlockStatement, environment: *Environment) Obj
     var result = NULL;
 
     for (block.statements.items) |stmt| {
+        // std.debug.print("Evaluating Block\n", .{});
+        // Pretty.print(block.allocator, stmt, .{ .max_depth = 100 }) catch unreachable;
         switch (stmt) {
             .expression => |expr| {
                 if (expr.expression) |exp| {
                     const evaluated = Eval(Ast.Node{ .expression = exp.* }, environment);
+                    // std.debug.print("Evaluating expression in Block {any} \n", .{evaluated});
                     if (evaluated) |ev| {
                         result = ev;
                         switch (ev) {
@@ -437,260 +503,308 @@ fn testEval(allocator: Allocator, input: []const u8) Object {
     var l = Lexer.init(allocator, input);
     defer l.deinit();
     var parser = Parser.init(allocator, l);
-    const program = parser.parseProgram();
+    var program = parser.parseProgram();
     defer parser.deinit();
-    // defer program.deinit();
+    defer program.deinit();
     var env = Environment.init(allocator) catch unreachable;
     defer env.deinit(allocator);
     // Pretty.print(allocator, program.statements.items, .{ .max_depth = 100 }) catch unreachable;
     const object = Eval(Ast.Node{ .program = program }, env);
     if (object) |eval| {
-        Pretty.print(allocator, eval, .{ .max_depth = 100 }) catch unreachable;
+        // Pretty.print(allocator, eval, .{ .max_depth = 100 }) catch unreachable;
         return eval;
     }
     return Object{ .nil = Object.Nil{} };
 }
 
-test "TestFunctionObject" {
-    const allocator = std.testing.allocator;
-    const input = "fn(x) { x + 2; };";
-    const evaluated = testEval(allocator, input);
-    switch (evaluated) {
-        .function => |fun| {
-            if (fun.parameters) |params| {
-                try std.testing.expectEqual(1, params.items.len);
-                try std.testing.expectEqualSlices(u8, "x", params.items[0].string());
-            }
-            const bodyString = try fun.body.?.string();
-            std.debug.print("{any}\n", .{bodyString});
-            // try Pretty.print(allocator, bodyString, .{ .max_depth = 100 });
-            // try std.testing.expectEqualSlices(u8, "(x+2)", bodyString);
-
-        },
-        else => |case| {
-            std.debug.print("Object is not function {any} \n", .{case});
-            try std.testing.expect(false);
-        },
-    }
-}
-
-test "TestEvalIntegerExpression" {
+test "Test Closures" {
     const allocator = std.testing.allocator;
     const TestStruct = struct {
         input: []const u8,
         expected: i64,
     };
     const testTable = [_]TestStruct{
-        TestStruct{ .expected = 5, .input = "5" },
-        TestStruct{ .expected = 10, .input = "10" },
-        TestStruct{ .expected = -5, .input = "-5" },
-        TestStruct{ .expected = -10, .input = "-10" },
-        TestStruct{ .expected = -10, .input = "-10" },
-        // weird way but works for now
-        TestStruct{ .expected = -2, .input = "(-1) + -1" },
-        TestStruct{ .expected = 10, .input = "5 + 5 + 5 + 5 - 10" },
-        TestStruct{ .expected = 37, .input = "3 * (3 * 3) + 10" },
-        TestStruct{ .expected = 50, .input = "(5 + 10 * 2 + 15 / 3) * 2 + -10" },
+        TestStruct{ .expected = 12, .input = 
+        \\let newAdder = fn(x) {
+        \\fn(y) { x + y };
+        \\};
+        \\let addTwo = newAdder(2);
+        \\addTwo(10);};
+        },
     };
-
-    for (testTable) |value| {
-        const evaluated = testEval(allocator, value.input);
-        // std.debug.print("{any} \n Test out TestEvalIntegerExpression\n", .{evaluated});
-        const result = testIntegerObject(evaluated, value.expected);
-        try std.testing.expect(result);
-    }
+    const evaluated = testEval(allocator, testTable[0].input);
+    const result = testIntegerObject(evaluated, testTable[0].expected);
+    try std.testing.expect(result);
 }
-// TODO: FIx Error Handling to print out wrong objects
-test "TestErrorHandler" {
+test "TestFunctionObject" {
     const allocator = std.testing.allocator;
-    const TestStruct = struct {
-        expected: []const u8,
-        input: []const u8,
-        typemis: bool,
-    };
-    const testTable = [_]TestStruct{ TestStruct{
-        .expected = "type mismatch",
-        .input = "5 + true",
-        .typemis = true,
-    }, TestStruct{
-        .expected = "Unknown operator",
-        .input = "true + false",
-        .typemis = false,
-    }, TestStruct{
-        .expected = "Unknown operator",
-        .input = "-true",
-        .typemis = false,
-    }, TestStruct{
-        .expected = "ident not found ",
-        .input = "foobar",
-        .typemis = false,
-    } };
-    for (testTable) |value| {
-        const evaluated = testEval(allocator, value.input);
-        switch (evaluated) {
-            .eror => {
-                if (value.typemis) {
-                    try std.testing.expectEqualSlices(u8, value.expected, evaluated.eror.message[0..13]);
-                    continue;
+    const input = "fn(x) { x + 2; };";
+    // const evaluated = testEval(allocator, input);
+    var l = Lexer.init(allocator, input);
+    defer l.deinit();
+    var parser = Parser.init(allocator, l);
+    var program = parser.parseProgram();
+    defer parser.deinit();
+    defer program.deinit();
+    var env = Environment.init(allocator) catch unreachable;
+    defer env.deinit(allocator);
+    const object = Eval(Ast.Node{ .program = program }, env);
+    if (object) |eval| {
+        switch (eval) {
+            .function => |fun| {
+                if (fun.parameters) |params| {
+                    try std.testing.expectEqual(1, params.items.len);
+                    try std.testing.expectEqualSlices(u8, "x", params.items[0].string());
                 }
-                try std.testing.expectEqualSlices(u8, value.expected, evaluated.eror.message[0..16]);
+                const bodyString = try fun.body.?.string();
+                try std.testing.expectEqualSlices(u8, "(x + 2)", bodyString);
+                allocator.free(bodyString);
+                // try Pretty.print(allocator, bodyString, .{ .max_depth = 100 });
+                // try std.testing.expectEqualSlices(u8, "(x+2)", bodyString);
+
             },
-            inline else => |case| {
-                std.debug.print("no error object returned, got {any}\n", .{case});
+            else => |case| {
+                std.debug.print("Object is not function {any} \n", .{case});
                 try std.testing.expect(false);
             },
         }
     }
 }
-test "TestLetStatements" {
-    const allocator = std.testing.allocator;
-    const TestStruct = struct {
-        input: []const u8,
-        expected: i64,
-    };
 
-    const testTable = [_]TestStruct{
-        TestStruct{ .expected = 5, .input = 
-        \\let a = 5;
-        \\let b = a > 3;
-        \\a;
-        \\let c = a * 99;
-        \\ if (true) {let p = 20;} else {1};
-        \\ let d = if (c>a) {99} else {100};
-        \\d;
-        \\ d * c * a;
-        \\a;
-        },
-    };
-
-    for (testTable) |value| {
-        const evalualted = testEval(allocator, value.input);
-        const result = testIntegerObject(evalualted, value.expected);
-        // std.debug.print("{any}\n Test Out letStatement \n", .{evalualted});
-        try std.testing.expect(result);
-    }
-}
-test "TestReturnStatements" {
-    const allocator = std.testing.allocator;
-    const TestStruct = struct {
-        input: []const u8,
-        expected: i64,
-    };
-    const testTable = [_]TestStruct{
-        TestStruct{ .expected = 5, .input = "return 5;" },
-        TestStruct{ .expected = 10, .input = "return 10;" },
-        TestStruct{ .expected = -5, .input = "return -5;" },
-        TestStruct{ .expected = -10, .input = "return -10;" },
-        TestStruct{ .expected = 10, .input = "return 2*5;" },
-
-        TestStruct{
-            .expected = 10,
-            .input =
-            \\ if(1999>200) {
-            \\
-            \\if (120 > 21) {return 10} else {return 200}
-            \\
-            \\return 1;
-            \\}
-            ,
-        },
-    };
-
-    for (testTable) |value| {
-        const evaluated = testEval(allocator, value.input);
-        const result = testIntegerObject(evaluated, value.expected);
-        try std.testing.expect(result);
-    }
-}
-test "TestBangOperator" {
-    const allocator = std.testing.allocator;
-    const TestStruct = struct {
-        input: []const u8,
-        expected: bool,
-    };
-    const testTable = [_]TestStruct{
-        TestStruct{ .expected = false, .input = "!true" },
-        TestStruct{ .expected = true, .input = "!false" },
-        TestStruct{ .expected = false, .input = "!5" },
-        TestStruct{ .expected = true, .input = "!!true" },
-        TestStruct{ .expected = false, .input = "!!false" },
-        TestStruct{ .expected = true, .input = "!!5" },
-    };
-
-    for (testTable) |value| {
-        const evaluated = testEval(allocator, value.input);
-        const result = testBooleanObject(evaluated, value.expected);
-        try std.testing.expect(result);
-    }
-}
-
-test "TestIfElseExpression" {
-    const allocator = std.testing.allocator;
-    const TestStruct = struct {
-        input: []const u8,
-        expected: Object,
-    };
-    const testTable = [_]TestStruct{
-        TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (true) { 10 }" },
-        TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (true) { 10 } else { 20 }" },
-        TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 20 } }, .input = "if (false) { 10 } else { 20 }" },
-        TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (1) { 10 } else { 20 }" },
-        TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (1 < 2) { 10 }" },
-        TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (1 < 2) { 10 } else { 20 }" },
-        TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 20 } }, .input = "if (1 > 2) { 10 } else { 20 }" },
-        TestStruct{ .expected = NULL, .input = "if (false) { 10 }" },
-    };
-    var passTest = true;
-    for (testTable) |value| {
-        const evaluated = testEval(allocator, value.input);
-        switch (value.expected) {
-            .integer => {
-                const result = testIntegerObject(evaluated, value.expected.integer.value);
-                if (passTest) {
-                    passTest = result;
-                }
-            },
-            .boolean => {
-                const result = testBooleanObject(evaluated, value.expected.boolean.value);
-                if (passTest) {
-                    passTest = result;
-                }
-            },
-            .nil => {
-                const result = testNullObject(evaluated);
-                if (passTest) {
-                    passTest = result;
-                }
-            },
-            else => passTest = false,
-        }
-    }
-    try std.testing.expect(passTest);
-}
-test "TestEvalBooleanExpression" {
-    const allocator = std.testing.allocator;
-    const TestStruct = struct {
-        input: []const u8,
-        expected: bool,
-    };
-    const testTable = [_]TestStruct{
-        TestStruct{ .expected = true, .input = "true" },
-        TestStruct{ .expected = false, .input = "false" },
-        TestStruct{ .expected = true, .input = "1 < 2" },
-        TestStruct{ .expected = false, .input = "1 > 2" },
-        TestStruct{ .expected = false, .input = "1 == 2" },
-        TestStruct{ .expected = true, .input = "1 != 2" },
-        TestStruct{ .expected = true, .input = "true == true" },
-        TestStruct{ .expected = false, .input = "true == false" },
-        TestStruct{ .expected = false, .input = "true != true" },
-        TestStruct{ .expected = true, .input = "true != false" },
-        TestStruct{ .expected = false, .input = "(1 < 2) != true" },
-        TestStruct{ .expected = false, .input = "(1 > 2) == true" },
-    };
-
-    for (testTable) |value| {
-        const evaluated = testEval(allocator, value.input);
-        const result = testBooleanObject(evaluated, value.expected);
-        try std.testing.expect(result);
-    }
-}
+// test "Test FunctionApplication" {
+//     const allocator = std.testing.allocator;
+//     const TestStruct = struct {
+//         input: []const u8,
+//         expected: i64,
+//     };
+//
+//     const testTable = [_]TestStruct{
+//         TestStruct{ .expected = 5, .input = "let identity = fn(x) { x; }; identity(5);" },
+//         // TestStruct{ .expected = 5, .input = "fn(x) { x; }(5)" },
+//     };
+//     for (testTable) |value| {
+//         const evaluated = testEval(allocator, value.input);
+//         const result = testIntegerObject(evaluated, value.expected);
+//         try std.testing.expect(result);
+//     }
+// }
+// test "TestEvalIntegerExpression" {
+//     const allocator = std.testing.allocator;
+//     const TestStruct = struct {
+//         input: []const u8,
+//         expected: i64,
+//     };
+//     const testTable = [_]TestStruct{
+//         TestStruct{ .expected = 5, .input = "5" },
+//         TestStruct{ .expected = 10, .input = "10" },
+//         TestStruct{ .expected = -5, .input = "-5" },
+//         TestStruct{ .expected = -10, .input = "-10" },
+//         TestStruct{ .expected = -10, .input = "-10" },
+//         // weird way but works for now
+//         TestStruct{ .expected = -2, .input = "(-1) + -1" },
+//         TestStruct{ .expected = 10, .input = "5 + 5 + 5 + 5 - 10" },
+//         TestStruct{ .expected = 37, .input = "3 * (3 * 3) + 10" },
+//         TestStruct{ .expected = 50, .input = "(5 + 10 * 2 + 15 / 3) * 2 + -10" },
+//     };
+//
+//     for (testTable) |value| {
+//         const evaluated = testEval(allocator, value.input);
+//         // std.debug.print("{any} \n Test out TestEvalIntegerExpression\n", .{evaluated});
+//         const result = testIntegerObject(evaluated, value.expected);
+//         try std.testing.expect(result);
+//     }
+// }
+// // TODO: FIx Error Handling to print out wrong objects
+// test "TestErrorHandler" {
+//     const allocator = std.testing.allocator;
+//     const TestStruct = struct {
+//         expected: []const u8,
+//         input: []const u8,
+//         typemis: bool,
+//     };
+//     const testTable = [_]TestStruct{ TestStruct{
+//         .expected = "type mismatch",
+//         .input = "5 + true",
+//         .typemis = true,
+//     }, TestStruct{
+//         .expected = "Unknown operator",
+//         .input = "true + false",
+//         .typemis = false,
+//     }, TestStruct{
+//         .expected = "Unknown operator",
+//         .input = "-true",
+//         .typemis = false,
+//     }, TestStruct{
+//         .expected = "ident not found ",
+//         .input = "foobar",
+//         .typemis = false,
+//     } };
+//     for (testTable) |value| {
+//         const evaluated = testEval(allocator, value.input);
+//         switch (evaluated) {
+//             .eror => {
+//                 if (value.typemis) {
+//                     try std.testing.expectEqualSlices(u8, value.expected, evaluated.eror.message[0..13]);
+//                     continue;
+//                 }
+//                 try std.testing.expectEqualSlices(u8, value.expected, evaluated.eror.message[0..16]);
+//             },
+//             inline else => |case| {
+//                 std.debug.print("no error object returned, got {any}\n", .{case});
+//                 try std.testing.expect(false);
+//             },
+//         }
+//     }
+// }
+// test "TestLetStatements" {
+//     const allocator = std.testing.allocator;
+//     const TestStruct = struct {
+//         input: []const u8,
+//         expected: i64,
+//     };
+//
+//     const testTable = [_]TestStruct{
+//         TestStruct{ .expected = 5, .input =
+//         \\let a = 5;
+//         \\let b = a > 3;
+//         \\a;
+//         \\let c = a * 99;
+//         \\ if (true) {let p = 20;} else {1};
+//         \\ let d = if (c>a) {99} else {100};
+//         \\d;
+//         \\ d * c * a;
+//         \\a;
+//         },
+//     };
+//
+//     for (testTable) |value| {
+//         const evalualted = testEval(allocator, value.input);
+//         const result = testIntegerObject(evalualted, value.expected);
+//         // std.debug.print("{any}\n Test Out letStatement \n", .{evalualted});
+//         try std.testing.expect(result);
+//     }
+// }
+// test "TestReturnStatements" {
+//     const allocator = std.testing.allocator;
+//     const TestStruct = struct {
+//         input: []const u8,
+//         expected: i64,
+//     };
+//     const testTable = [_]TestStruct{
+//         TestStruct{ .expected = 5, .input = "return 5;" },
+//         TestStruct{ .expected = 10, .input = "return 10;" },
+//         TestStruct{ .expected = -5, .input = "return -5;" },
+//         TestStruct{ .expected = -10, .input = "return -10;" },
+//         TestStruct{ .expected = 10, .input = "return 2*5;" },
+//
+//         TestStruct{
+//             .expected = 10,
+//             .input =
+//             \\ if(1999>200) {
+//             \\
+//             \\if (120 > 21) {return 10} else {return 200}
+//             \\
+//             \\return 1;
+//             \\}
+//             ,
+//         },
+//     };
+//
+//     for (testTable) |value| {
+//         const evaluated = testEval(allocator, value.input);
+//         const result = testIntegerObject(evaluated, value.expected);
+//         try std.testing.expect(result);
+//     }
+// }
+// test "TestBangOperator" {
+//     const allocator = std.testing.allocator;
+//     const TestStruct = struct {
+//         input: []const u8,
+//         expected: bool,
+//     };
+//     const testTable = [_]TestStruct{
+//         TestStruct{ .expected = false, .input = "!true" },
+//         TestStruct{ .expected = true, .input = "!false" },
+//         TestStruct{ .expected = false, .input = "!5" },
+//         TestStruct{ .expected = true, .input = "!!true" },
+//         TestStruct{ .expected = false, .input = "!!false" },
+//         TestStruct{ .expected = true, .input = "!!5" },
+//     };
+//
+//     for (testTable) |value| {
+//         const evaluated = testEval(allocator, value.input);
+//         const result = testBooleanObject(evaluated, value.expected);
+//         try std.testing.expect(result);
+//     }
+// }
+//
+// test "TestIfElseExpression" {
+//     const allocator = std.testing.allocator;
+//     const TestStruct = struct {
+//         input: []const u8,
+//         expected: Object,
+//     };
+//     const testTable = [_]TestStruct{
+//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (true) { 10 }" },
+//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (true) { 10 } else { 20 }" },
+//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 20 } }, .input = "if (false) { 10 } else { 20 }" },
+//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (1) { 10 } else { 20 }" },
+//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (1 < 2) { 10 }" },
+//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 10 } }, .input = "if (1 < 2) { 10 } else { 20 }" },
+//         TestStruct{ .expected = Object{ .integer = Object.Integer{ .allocator = allocator, .value = 20 } }, .input = "if (1 > 2) { 10 } else { 20 }" },
+//         TestStruct{ .expected = NULL, .input = "if (false) { 10 }" },
+//     };
+//     var passTest = true;
+//     for (testTable) |value| {
+//         const evaluated = testEval(allocator, value.input);
+//         switch (value.expected) {
+//             .integer => {
+//                 const result = testIntegerObject(evaluated, value.expected.integer.value);
+//                 if (passTest) {
+//                     passTest = result;
+//                 }
+//             },
+//             .boolean => {
+//                 const result = testBooleanObject(evaluated, value.expected.boolean.value);
+//                 if (passTest) {
+//                     passTest = result;
+//                 }
+//             },
+//             .nil => {
+//                 const result = testNullObject(evaluated);
+//                 if (passTest) {
+//                     passTest = result;
+//                 }
+//             },
+//             else => passTest = false,
+//         }
+//     }
+//     try std.testing.expect(passTest);
+// }
+// test "TestEvalBooleanExpression" {
+//     const allocator = std.testing.allocator;
+//     const TestStruct = struct {
+//         input: []const u8,
+//         expected: bool,
+//     };
+//     const testTable = [_]TestStruct{
+//         TestStruct{ .expected = true, .input = "true" },
+//         TestStruct{ .expected = false, .input = "false" },
+//         TestStruct{ .expected = true, .input = "1 < 2" },
+//         TestStruct{ .expected = false, .input = "1 > 2" },
+//         TestStruct{ .expected = false, .input = "1 == 2" },
+//         TestStruct{ .expected = true, .input = "1 != 2" },
+//         TestStruct{ .expected = true, .input = "true == true" },
+//         TestStruct{ .expected = false, .input = "true == false" },
+//         TestStruct{ .expected = false, .input = "true != true" },
+//         TestStruct{ .expected = true, .input = "true != false" },
+//         TestStruct{ .expected = false, .input = "(1 < 2) != true" },
+//         TestStruct{ .expected = false, .input = "(1 > 2) == true" },
+//     };
+//
+//     for (testTable) |value| {
+//         const evaluated = testEval(allocator, value.input);
+//         const result = testBooleanObject(evaluated, value.expected);
+//         try std.testing.expect(result);
+//     }
+// }

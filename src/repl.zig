@@ -17,7 +17,7 @@ pub fn start(allocator: std.mem.Allocator) !void {
         std.debug.print("\n--> ", .{});
         if (try stdin.readUntilDelimiterOrEof(buffer[0..], '\n')) |value| {
             // const line = std.mem.trimRight(u8, value[0 .. value.len - 1], "\r");
-            var lexer = Lexer.init(allocator, value);
+            const lexer = Lexer.init(allocator, value);
             var parser = Parser.init(allocator, lexer);
             var program = parser.parseProgram();
 
@@ -35,25 +35,25 @@ pub fn start(allocator: std.mem.Allocator) !void {
                 switch (ev) {
                     .boolean => |boo| {
                         const booStr = try boo.inspect();
-                        std.debug.print("{s}\n", .{booStr});
+                        std.debug.print("Bool {s}\n", .{booStr});
                     },
                     .integer => |int| {
                         const intStr = try int.inspect();
-                        std.debug.print("{s}\n", .{intStr});
+                        std.debug.print("Int {s}\n", .{intStr});
                     },
                     .returnval => |ret| {
                         const retstr = try ret.inspect();
-                        std.debug.print("{s}\n", .{retstr});
+                        std.debug.print("Return {s}\n", .{retstr});
                     },
                     .nil => |NULL| {
-                        std.debug.print("{s}\n", .{NULL.inspect()});
+                        std.debug.print("Nil {s}\n", .{NULL.inspect()});
                     },
                     .eror => |err| {
                         std.debug.print("Repl ERROR {s}", .{err.inspect()});
                     },
                     .function => |fun| {
                         const funstring = fun.inspect() catch unreachable;
-                        std.debug.print("{s}\n", .{funstring});
+                        std.debug.print("Function {s}\n", .{funstring});
                         allocator.free(funstring);
                     },
                 }
@@ -61,7 +61,7 @@ pub fn start(allocator: std.mem.Allocator) !void {
             // env.printEnvironment();
             // try pretty.print(allocator, env.store, .{ .max_depth = 30 });
             // std.debug.print("\n {any} \n", .{env.store.get("a")});
-            defer lexer.deinit();
+            // defer lexer.deinit();
             defer parser.deinit();
             defer stringer.deinit();
         }
