@@ -12,11 +12,15 @@ pub fn start(allocator: std.mem.Allocator) !void {
     const stdin = std.io.getStdIn().reader();
 
     const buffer = try allocator.alloc(u8, 1024);
-    const env = try Env.init(allocator);
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    const arenaAlloc = arena.allocator();
+    const env = try Env.init(arenaAlloc);
     while (true) {
         std.debug.print("\n--> ", .{});
         if (try stdin.readUntilDelimiterOrEof(buffer[0..], '\n')) |value| {
-            // const line = std.mem.trimRight(u8, value[0 .. value.len - 1], "\r");
+            if (std.mem.eql(u8, value, "q")) {
+                break;
+            }
             const lexer = Lexer.init(allocator, value);
             var parser = Parser.init(allocator, lexer);
             var program = parser.parseProgram();
@@ -66,7 +70,7 @@ pub fn start(allocator: std.mem.Allocator) !void {
             defer stringer.deinit();
         }
     }
-    defer env.deinit(allocator);
+    defer arena.deinit();
 }
 
 fn printParseErrors(errors: std.ArrayList([]const u8)) void {

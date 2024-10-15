@@ -27,8 +27,8 @@ pub const Environment = struct {
         allocator.destroy(self);
     }
 
-    pub fn initEnclosed(allocator: Allocator, outer: *Environment) !*Environment {
-        var env = try init(allocator);
+    pub fn initEnclosed(outer: *Environment) !*Environment {
+        var env = try init(outer.allocator);
         env.outer = outer;
         return env;
     }
