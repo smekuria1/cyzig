@@ -62,7 +62,7 @@ pub fn start(allocator: std.mem.Allocator) !void {
                     },
                 }
             }
-            // env.printEnvironment();
+            env.printEnvironment();
             // try pretty.print(allocator, env.store, .{ .max_depth = 30 });
             // std.debug.print("\n {any} \n", .{env.store.get("a")});
             // defer lexer.deinit();
@@ -74,7 +74,7 @@ pub fn start(allocator: std.mem.Allocator) !void {
 }
 
 fn printParseErrors(errors: std.ArrayList([]const u8)) void {
-    std.debug.print("WHOOPSIE YOU MADE AN ERROR\n \t (high chance its the parser freaking out)\n", .{});
+    std.debug.print("Main Error is usually the first one\n", .{});
     std.debug.print("Parser Errors: \n", .{});
     for (errors.items) |value| {
         std.debug.print("\t{s}\n", .{value});

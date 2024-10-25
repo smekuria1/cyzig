@@ -353,7 +353,7 @@ pub const Parser = struct {
 
         return exp;
     }
-    //TODO: Stopped here
+
     pub fn parseBlockStatement(self: *Parser) ?Ast.BlockStatement {
         var block = Ast.BlockStatement{
             .token = self.curToken,

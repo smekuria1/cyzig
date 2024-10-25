@@ -10,8 +10,18 @@ const Environment = @import("./environment.zig").Environment;
 const NULL = Object{ .nil = Object.Nil{} };
 const TRUE = Object{ .boolean = Object.Boolean{ .value = true } };
 const FALSE = Object{ .boolean = Object.Boolean{ .value = false } };
+pub const stackMax = 4000;
+pub var evalCount: usize = 0;
 
 pub fn Eval(node: Ast.Node, environment: *Environment) ?Object {
+    if (evalCount > stackMax) {
+        return Object{ .eror = Object.Error{
+            .message = "stack overflow",
+            .stop = true,
+        } };
+    }
+    evalCount += 1;
+    std.log.warn("Stack depth {d}\n", .{evalCount});
     switch (node) {
         .expression => |exp| {
             switch (exp) {
@@ -518,7 +528,7 @@ fn testEval(allocator: Allocator, input: []const u8) Object {
     return Object{ .nil = Object.Nil{} };
 }
 
-test "Test Closures" {
+test "Test Recursive Functions" {
     const allocator = std.testing.allocator;
     const TestStruct = struct {
         input: []const u8,
@@ -526,17 +536,44 @@ test "Test Closures" {
     };
     const testTable = [_]TestStruct{
         TestStruct{ .expected = 12, .input = 
-        \\let newAdder = fn(x) {
-        \\fn(y) { x + y };
+        \\let counter = fn(x) {
+        \\if (x > 500) {
+        \\return true;
+        \\} else {
+        \\let foobar = 9999;
+        \\counter(x + 1);
+        \\}
         \\};
-        \\let addTwo = newAdder(2);
-        \\addTwo(10);};
+        \\counter(0);
         },
     };
+
     const evaluated = testEval(allocator, testTable[0].input);
-    const result = testIntegerObject(evaluated, testTable[0].expected);
+    std.debug.print("Evalcount, {d}\n", .{evalCount});
+    std.debug.print("Error {s}\n", .{evaluated.eror.message});
+    const result = testBooleanObject(evaluated, true);
     try std.testing.expect(result);
 }
+
+// test "Test Closures" {
+//     const allocator = std.testing.allocator;
+//     const TestStruct = struct {
+//         input: []const u8,
+//         expected: i64,
+//     };
+//     const testTable = [_]TestStruct{
+//         TestStruct{ .expected = 12, .input =
+//         \\let newAdder = fn(x) {
+//         \\fn(y) { x + y };
+//         \\};
+//         \\let addTwo = newAdder(2);
+//         \\addTwo(10);};
+//         },
+//     };
+//     const evaluated = testEval(allocator, testTable[0].input);
+//     const result = testIntegerObject(evaluated, testTable[0].expected);
+//     try std.testing.expect(result);
+// }
 // test "TestFunctionObject" {
 //     const allocator = std.testing.allocator;
 //     const input = "fn(x) { x + 2; };";

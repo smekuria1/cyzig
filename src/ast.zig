@@ -301,8 +301,10 @@ pub const Expression = union(enum) {
                                     retval.deinit(allocator);
                                 }
                             },
-                            else => |case| {
-                                std.debug.print("ifexp alternative not being cleaned {any}", .{case});
+                            .letStatement => |let| {
+                                if (let.value) |letval| {
+                                    letval.deinit(allocator);
+                                }
                             },
                         }
                     }

@@ -1,7 +1,7 @@
 
 # Cyzig
 
-A small, fast and dynamicly typed scripting language written in Zig.
+A small, fast and dynamicly typed scripting language written in Zig. Inspired by WAIIG by Thorsten Ball
 
 
 ## Features

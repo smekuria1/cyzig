@@ -49,7 +49,7 @@ pub fn run(allocator: Allocator, src: []u8) !void {
                 std.debug.print("Nil {s}\n", .{NULL.inspect()});
             },
             .eror => |err| {
-                std.debug.print("Repl ERROR {s}", .{err.inspect()});
+                std.debug.print("Repl ERROR {s} \n", .{err.inspect()});
             },
             .function => |fun| {
                 const funstring = fun.inspect() catch unreachable;
