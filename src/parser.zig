@@ -58,6 +58,7 @@ pub const Parser = struct {
         parser.registerPrefix(.LPAREN, parseGroupedExpressions) catch unreachable;
         parser.registerPrefix(.IF, parseIfExpression) catch unreachable;
         parser.registerPrefix(.FUNCTION, parseFunctionLiteral) catch unreachable;
+        parser.registerPrefix(.STRING, parseStringLiteral) catch unreachable;
 
         parser.infixParseFns = Ast.GenericAst(infixParseFn).init(allocator) catch unreachable;
         parser.registerInfix(.PLUS, parseInfixExpression) catch unreachable;
@@ -126,10 +127,10 @@ pub const Parser = struct {
             return false;
         }
 
-        // std.debug.print("\nParser had {d} errors\n", .{err.items.len});
-        // for (err.items) |value| {
-        //     std.debug.print("{s}\n", .{value});
-        // }
+        std.debug.print("\nParser had {d} errors\n", .{err.items.len});
+        for (err.items) |value| {
+            std.debug.print("{s}\n", .{value});
+        }
         return true;
     }
 
@@ -151,6 +152,16 @@ pub const Parser = struct {
         }
 
         return program;
+    }
+
+    pub fn parseStringLiteral(self: *Parser) ?*Ast.Expression {
+        const exp = Ast.Expression.init(self.allocator);
+        exp.* = Ast.Expression{ .stringLiteral = Ast.StringLiteral{
+            .token = self.curToken,
+            .value = self.curToken.literal,
+            .allocator = self.allocator,
+        } };
+        return exp;
     }
 
     pub fn parseIdentifier(self: *Parser) ?*Ast.Expression {
@@ -567,6 +578,23 @@ pub const Parser = struct {
         }
     }
 };
+test "TestStringLiterals" {
+    const allocator = std.testing.allocator;
+    const input =
+        \\"hello world"
+    ;
+    var l = Lexer.init(allocator, input);
+    defer l.deinit();
+    var parser = Parser.init(allocator, l);
+    var program = parser.parseProgram();
+    const stringer = try program.string();
+    defer program.deinit();
+    defer parser.deinit();
+    defer stringer.deinit();
+    const parsercheck = parser.checkParserErros();
+    try std.testing.expect(!parsercheck);
+    try std.testing.expectEqualSlices(u8, "hello world", program.statements.items[0].expression.expression.?.stringLiteral.value);
+}
 
 // test "TestLetStatements Good" {
 //     const allocator = std.testing.allocator;

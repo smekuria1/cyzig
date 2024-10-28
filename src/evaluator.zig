@@ -21,7 +21,7 @@ pub fn Eval(node: Ast.Node, environment: *Environment) ?Object {
         } };
     }
     evalCount += 1;
-    std.log.warn("Stack depth {d}\n", .{evalCount});
+    // std.log.warn("Stack depth {d}\n", .{evalCount});
     switch (node) {
         .expression => |exp| {
             switch (exp) {
@@ -93,6 +93,12 @@ pub fn Eval(node: Ast.Node, environment: *Environment) ?Object {
                         return args[0];
                     }
                     return applyFunction(function.?, args);
+                },
+                .stringLiteral => |str| {
+                    return Object{ .string = Object.String{
+                        .value = str.value,
+                        .allocator = str.allocator,
+                    } };
                 },
             }
         },
@@ -228,14 +234,14 @@ fn evalPrefixExpression(allocator: Allocator, operator: []const u8, right: Objec
             return evalMinusPrefixOperatorExpression(allocator, right);
         },
         else => {
-            return newPrefixError(operator);
+            return newPrefixError(operator, right);
         },
     }
 }
 
-fn newPrefixError(operator: []const u8) Object {
+fn newPrefixError(operator: []const u8, right: Object) Object {
     var buf: [1024]u8 = undefined;
-    const mess = std.fmt.bufPrint(&buf, "Unknown operator: {s}", .{operator}) catch unreachable;
+    const mess = std.fmt.bufPrint(&buf, "Unknown operator: {s} {any}", .{ operator, getObjType(right) }) catch unreachable;
     return Object{ .eror = Object.Error{ .message = mess } };
 }
 
@@ -245,6 +251,24 @@ fn evalInfixExpression(allocator: Allocator, operator: []const u8, left: Object,
             switch (right) {
                 .integer => |rightint| {
                     return evalIntegerInfixExpression(allocator, operator, leftint, rightint);
+                },
+                else => return newInfixError(operator, left, right, true),
+            }
+        },
+        .string => |leftstr| {
+            switch (right) {
+                .string => |rightstr| {
+                    if (std.mem.eql(u8, operator, "+")) {
+                        const concated = std.fmt.allocPrint(allocator, "{s}{s}", .{
+                            leftstr.value,
+                            rightstr.value,
+                        }) catch unreachable;
+                        return Object{ .string = Object.String{
+                            .value = concated,
+                            .allocator = allocator,
+                        } };
+                    }
+                    return newInfixError(operator, left, right, false);
                 },
                 else => return newInfixError(operator, left, right, true),
             }
@@ -264,13 +288,21 @@ fn evalInfixExpression(allocator: Allocator, operator: []const u8, left: Object,
 fn newInfixError(operator: []const u8, left: Object, right: Object, typemis: bool) Object {
     var buf: [1024]u8 = undefined;
     if (typemis) {
-        const mess = std.fmt.bufPrint(&buf, "type mismatch: {any} {s} {any} \n", .{ left.integer.oType(), operator, right.boolean.oType() }) catch unreachable;
+        const mess = std.fmt.bufPrint(&buf, "type mismatch: {any} {s} {any} \n", .{ getObjType(left), operator, getObjType(right) }) catch unreachable;
         return Object{ .eror = Object.Error{ .message = mess } };
     }
-    const mess = std.fmt.bufPrint(&buf, "Unknown operator {any} {s} {any} \n", .{ left, operator, right }) catch unreachable;
+    const mess = std.fmt.bufPrint(&buf, "Unknown operator {any} {s} {any} \n", .{ getObjType(left), operator, getObjType(right) }) catch unreachable;
     return Object{ .eror = Object.Error{
         .message = mess,
     } };
+}
+
+fn getObjType(o: Object) ObjectType {
+    return switch (o) {
+        inline else => |case| {
+            return case.oType();
+        },
+    };
 }
 
 fn evalIfExpression(ifexpr: Ast.IfExpression, environment: *Environment) Object {
@@ -373,7 +405,7 @@ fn evalMinusPrefixOperatorExpression(allocator: Allocator, right: Object) Object
             const val = right.integer.value;
             return Object{ .integer = Object.Integer{ .allocator = allocator, .value = -val } };
         },
-        else => return newPrefixError("-"),
+        else => return newPrefixError("-", right),
     }
 }
 
@@ -410,6 +442,7 @@ fn evalProgram(stmts: []Ast.Statement, environment: *Environment) Object {
                     return result;
                 },
                 .function => result = Object{ .function = evaluated.function },
+                .string => result = Object{ .string = evaluated.string },
             }
         }
     }
@@ -527,33 +560,81 @@ fn testEval(allocator: Allocator, input: []const u8) Object {
     }
     return Object{ .nil = Object.Nil{} };
 }
-
-test "Test Recursive Functions" {
+test "TestBuiltinFunctions" {
     const allocator = std.testing.allocator;
     const TestStruct = struct {
         input: []const u8,
-        expected: i64,
+        expected: usize,
     };
     const testTable = [_]TestStruct{
-        TestStruct{ .expected = 12, .input = 
-        \\let counter = fn(x) {
-        \\if (x > 500) {
-        \\return true;
-        \\} else {
-        \\let foobar = 9999;
-        \\counter(x + 1);
-        \\}
-        \\};
-        \\counter(0);
+        TestStruct{ .expected = 6, .input = "len(\"foobar\")" },
+        TestStruct{ .expected = 11, .input = "len(\"Hello World\")" },
+    };
+    for (testTable) |value| {
+        const evaluated = testEval(allocator, value.input);
+        const result = testIntegerObject(evaluated, value.expected);
+        try std.testing.expect(result);
+    }
+}
+test "TestStringEvaluation" {
+    const allocator = std.testing.allocator;
+    const TestStruct = struct {
+        input: []const u8,
+        expected: []const u8,
+    };
+    const testTable = [_]TestStruct{
+        TestStruct{ .expected = "Hello World", .input = 
+        \\"Hello World"
         },
     };
 
-    const evaluated = testEval(allocator, testTable[0].input);
-    std.debug.print("Evalcount, {d}\n", .{evalCount});
-    std.debug.print("Error {s}\n", .{evaluated.eror.message});
-    const result = testBooleanObject(evaluated, true);
-    try std.testing.expect(result);
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    var l = Lexer.init(allocator, testTable[0].input);
+    defer l.deinit();
+    var parser = Parser.init(allocator, l);
+    var program = parser.parseProgram();
+    defer parser.deinit();
+    defer program.deinit();
+    const env = Environment.init(arena.allocator()) catch unreachable;
+    defer arena.deinit();
+    // Pretty.print(allocator, program.statements.items, .{ .max_depth = 100 }) catch unreachable;
+    const object = Eval(Ast.Node{ .program = program }, env);
+    if (object) |evaluated| {
+        if (evaluated != .string) {
+            std.debug.print("Object is not string {any} \n", .{evaluated});
+            try std.testing.expect(false);
+        }
+        // std.debug.print("evaluated {any} \n", .{evaluated});
+        try std.testing.expectEqualStrings(testTable[0].expected, evaluated.string.value);
+    }
 }
+
+// test "Test Recursive Functions" {
+//     const allocator = std.testing.allocator;
+//     const TestStruct = struct {
+//         input: []const u8,
+//         expected: i64,
+//     };
+//     const testTable = [_]TestStruct{
+//         TestStruct{ .expected = 12, .input =
+//         \\let counter = fn(x) {
+//         \\if (x > 500) {
+//         \\return true;
+//         \\} else {
+//         \\let foobar = 9999;
+//         \\counter(x + 1);
+//         \\}
+//         \\};
+//         \\counter(0);
+//         },
+//     };
+//
+//     const evaluated = testEval(allocator, testTable[0].input);
+//     std.debug.print("Evalcount, {d}\n", .{evalCount});
+//     std.debug.print("Error {s}\n", .{evaluated.eror.message});
+//     const result = testBooleanObject(evaluated, true);
+//     try std.testing.expect(result);
+// }
 
 // test "Test Closures" {
 //     const allocator = std.testing.allocator;
@@ -653,48 +734,61 @@ test "Test Recursive Functions" {
 //         try std.testing.expect(result);
 //     }
 // }
-// // TODO: FIx Error Handling to print out wrong objects
-// test "TestErrorHandler" {
-//     const allocator = std.testing.allocator;
-//     const TestStruct = struct {
-//         expected: []const u8,
-//         input: []const u8,
-//         typemis: bool,
-//     };
-//     const testTable = [_]TestStruct{ TestStruct{
-//         .expected = "type mismatch",
-//         .input = "5 + true",
-//         .typemis = true,
-//     }, TestStruct{
-//         .expected = "Unknown operator",
-//         .input = "true + false",
-//         .typemis = false,
-//     }, TestStruct{
-//         .expected = "Unknown operator",
-//         .input = "-true",
-//         .typemis = false,
-//     }, TestStruct{
-//         .expected = "ident not found ",
-//         .input = "foobar",
-//         .typemis = false,
-//     } };
-//     for (testTable) |value| {
-//         const evaluated = testEval(allocator, value.input);
-//         switch (evaluated) {
-//             .eror => {
-//                 if (value.typemis) {
-//                     try std.testing.expectEqualSlices(u8, value.expected, evaluated.eror.message[0..13]);
-//                     continue;
-//                 }
-//                 try std.testing.expectEqualSlices(u8, value.expected, evaluated.eror.message[0..16]);
-//             },
-//             inline else => |case| {
-//                 std.debug.print("no error object returned, got {any}\n", .{case});
-//                 try std.testing.expect(false);
-//             },
-//         }
-//     }
-// }
+// TODO: FIx Error Handling to print out wrong objects
+test "TestErrorHandler" {
+    const allocator = std.testing.allocator;
+    const TestStruct = struct {
+        expected: []const u8,
+        input: []const u8,
+        typemis: bool,
+    };
+    const testTable = [_]TestStruct{
+        TestStruct{
+            .expected = "type mismatch",
+            .input = "5 + true",
+            .typemis = true,
+        },
+        TestStruct{
+            .expected = "Unknown operator",
+            .input = "true + false",
+            .typemis = false,
+        },
+        TestStruct{
+            .expected = "Unknown operator",
+            .input = "-true",
+            .typemis = false,
+        },
+        TestStruct{
+            .expected = "ident not found ",
+            .input = "foobar",
+            .typemis = false,
+        },
+        TestStruct{
+            .expected = "Unknown operator",
+            .input =
+            \\"Hello" - "World";
+            ,
+            .typemis = false,
+        },
+    };
+
+    for (testTable) |value| {
+        const evaluated = testEval(allocator, value.input);
+        switch (evaluated) {
+            .eror => {
+                if (value.typemis) {
+                    try std.testing.expectEqualSlices(u8, value.expected, evaluated.eror.message[0..13]);
+                    continue;
+                }
+                try std.testing.expectEqualSlices(u8, value.expected, evaluated.eror.message[0..16]);
+            },
+            inline else => |case| {
+                std.debug.print("no error object returned, got {any}\n", .{case});
+                try std.testing.expect(false);
+            },
+        }
+    }
+}
 // test "TestLetStatements" {
 //     const allocator = std.testing.allocator;
 //     const TestStruct = struct {

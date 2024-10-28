@@ -86,6 +86,17 @@ pub const Lexer = struct {
         }
     }
 
+    pub fn readString(self: *Lexer, arenaAllocator: Allocator) []const u8 {
+        const position = self.position + 1;
+        while (true) {
+            self.readChar();
+            if (self.ch == '"' or self.ch == 0) {
+                break;
+            }
+        }
+        return std.fmt.allocPrint(arenaAllocator, "{s}", .{self.input[position..self.position]}) catch unreachable;
+    }
+
     pub fn isLetter(ch: u8) bool {
         return 'a' <= ch and ch <= 'z' or 'A' <= ch and ch <= 'Z' or ch == '_';
     }
@@ -200,6 +211,10 @@ pub const Lexer = struct {
             '}' => {
                 tok = newToken(arenaAllocator, TokenType.RBRACE, self.ch);
             },
+            '"' => {
+                tok.tType = .STRING;
+                tok.literal = self.readString(arenaAllocator);
+            },
 
             0 => {
                 tok.literal = "";
@@ -227,100 +242,116 @@ pub const Lexer = struct {
     }
 };
 
-// test "TestNextToken" {
-//     const allocator = std.testing.allocator;
-//     const input =
-//         \\let five == 5;
-//         \\let ten != 10;
-//         \\let add = fn(x, y) {
-//         \\              x + y;
-//         \\               };
-//         \\let result = add(five, ten);
-//         \\!-/*5;
-//         \\5 < 10 > 5;
-//         \\if (5 < 10) {
-//         \\    return true;
-//         \\} else {
-//         \\    return false;
-//         \\}
-//         \\10 == 10;
-//         \\10 != 9;
-//         \\
-//     ;
+test "TestNextToken" {
+    const allocator = std.testing.allocator;
+    const input =
+        \\let five = 5;
+        \\let ten = 10;
+        \\let add = fn(x, y) {
+        \\              x + y;
+        \\               };
+        \\let result = add(five, ten);
+        \\!-/*5;
+        \\5 < 10 > 5;
+        \\if (5 < 10) {
+        \\    return true;
+        \\} else {
+        \\    return false;
+        \\}
+        \\10 == 10
+        \\10 != 9
+        \\ "foobar"
+        \\ "foo bar"
+        \\
+    ;
 
-//     var lexer = Lexer.init(allocator, input);
-//     defer lexer.deinit();
+    var lexer = Lexer.init(allocator, input);
+    defer lexer.deinit();
 
-//     const expected_tokens = [_]Token{
-//         Token{ .tType = .LET, .literal = "let" },
-//         Token{ .tType = .IDENT, .literal = "five" },
-//         Token{ .tType = .ASSIGN, .literal = "=" },
-//         Token{ .tType = .INT, .literal = "5" },
-//         Token{ .tType = .SEMICOLON, .literal = ";" },
-//         Token{ .tType = .LET, .literal = "let" },
-//         Token{ .tType = .IDENT, .literal = "ten" },
-//         Token{ .tType = .ASSIGN, .literal = "=" },
-//         Token{ .tType = .INT, .literal = "10" },
-//         Token{ .tType = .SEMICOLON, .literal = ";" },
-//         Token{ .tType = .LET, .literal = "let" },
-//         Token{ .tType = .IDENT, .literal = "add" },
-//         Token{ .tType = .ASSIGN, .literal = "=" },
-//         Token{ .tType = .FUNCTION, .literal = "fn" },
-//         Token{ .tType = .LPAREN, .literal = "(" },
-//         Token{ .tType = .IDENT, .literal = "x" },
-//         Token{ .tType = .COMMA, .literal = "," },
-//         Token{ .tType = .IDENT, .literal = "y" },
-//         Token{ .tType = .RPAREN, .literal = ")" },
-//         Token{ .tType = .LBRACE, .literal = "{" },
-//         Token{ .tType = .IDENT, .literal = "x" },
-//         Token{ .tType = .PLUS, .literal = "+" },
-//         Token{ .tType = .IDENT, .literal = "y" },
-//         Token{ .tType = .SEMICOLON, .literal = ";" },
-//         Token{ .tType = .RBRACE, .literal = "}" },
-//         Token{ .tType = .SEMICOLON, .literal = ";" },
-//         Token{ .tType = .LET, .literal = "let" },
-//         Token{ .tType = .IDENT, .literal = "result" },
-//         Token{ .tType = .ASSIGN, .literal = "=" },
-//         Token{ .tType = .IDENT, .literal = "add" },
-//         Token{ .tType = .LPAREN, .literal = "(" },
-//         Token{ .tType = .IDENT, .literal = "five" },
-//         Token{ .tType = .COMMA, .literal = "," },
-//         Token{ .tType = .IDENT, .literal = "ten" },
-//         Token{ .tType = .RPAREN, .literal = ")" },
-//         Token{ .tType = .SEMICOLON, .literal = ";" },
-//         Token{ .tType = .BANG, .literal = "!" },
-//         Token{ .tType = .MINUS, .literal = "-" },
-//         Token{ .tType = .SLASH, .literal = "/" },
-//         Token{ .tType = .ASTERISK, .literal = "*" },
-//         Token{ .tType = .INT, .literal = "5" },
-//         Token{ .tType = .SEMICOLON, .literal = ";" },
-//         Token{ .tType = .INT, .literal = "5" },
-//         Token{ .tType = .LT, .literal = "<" },
-//         Token{ .tType = .INT, .literal = "10" },
-//         Token{ .tType = .GT, .literal = ">" },
-//         Token{ .tType = .INT, .literal = "5" },
-//         Token{ .tType = .SEMICOLON, .literal = ";" },
-//         Token{ .tType = .IF, .literal = "if" },
-//         Token{ .tType = .LPAREN, .literal = "(" },
-//         Token{ .tType = .INT, .literal = "5" },
-//         Token{ .tType = .LT, .literal = "<" },
-//         Token{ .tType = .INT, .literal = "10" },
-//         Token{ .tType = .RPAREN, .literal = ")" },
-//         Token{ .tType = .LBRACE, .literal = "{" },
-//         Token{ .tType = .RETURN, .literal = "return" },
-//         Token{ .tType = .TRUE, .literal = "true" },
-//         Token{ .tType = .SEMICOLON, .literal = ";" },
-//         Token{ .tType = .RBRACE, .literal = "}" },
+    const expected_tokens = [_]Token{
+        Token{ .tType = .LET, .literal = "let" },
+        Token{ .tType = .IDENT, .literal = "five" },
+        Token{ .tType = .ASSIGN, .literal = "=" },
+        Token{ .tType = .INT, .literal = "5" },
+        Token{ .tType = .SEMICOLON, .literal = ";" },
+        Token{ .tType = .LET, .literal = "let" },
+        Token{ .tType = .IDENT, .literal = "ten" },
+        Token{ .tType = .ASSIGN, .literal = "=" },
+        Token{ .tType = .INT, .literal = "10" },
+        Token{ .tType = .SEMICOLON, .literal = ";" },
+        Token{ .tType = .LET, .literal = "let" },
+        Token{ .tType = .IDENT, .literal = "add" },
+        Token{ .tType = .ASSIGN, .literal = "=" },
+        Token{ .tType = .FUNCTION, .literal = "fn" },
+        Token{ .tType = .LPAREN, .literal = "(" },
+        Token{ .tType = .IDENT, .literal = "x" },
+        Token{ .tType = .COMMA, .literal = "," },
+        Token{ .tType = .IDENT, .literal = "y" },
+        Token{ .tType = .RPAREN, .literal = ")" },
+        Token{ .tType = .LBRACE, .literal = "{" },
+        Token{ .tType = .IDENT, .literal = "x" },
+        Token{ .tType = .PLUS, .literal = "+" },
+        Token{ .tType = .IDENT, .literal = "y" },
+        Token{ .tType = .SEMICOLON, .literal = ";" },
+        Token{ .tType = .RBRACE, .literal = "}" },
+        Token{ .tType = .SEMICOLON, .literal = ";" },
+        Token{ .tType = .LET, .literal = "let" },
+        Token{ .tType = .IDENT, .literal = "result" },
+        Token{ .tType = .ASSIGN, .literal = "=" },
+        Token{ .tType = .IDENT, .literal = "add" },
+        Token{ .tType = .LPAREN, .literal = "(" },
+        Token{ .tType = .IDENT, .literal = "five" },
+        Token{ .tType = .COMMA, .literal = "," },
+        Token{ .tType = .IDENT, .literal = "ten" },
+        Token{ .tType = .RPAREN, .literal = ")" },
+        Token{ .tType = .SEMICOLON, .literal = ";" },
+        Token{ .tType = .BANG, .literal = "!" },
+        Token{ .tType = .MINUS, .literal = "-" },
+        Token{ .tType = .SLASH, .literal = "/" },
+        Token{ .tType = .ASTERISK, .literal = "*" },
+        Token{ .tType = .INT, .literal = "5" },
+        Token{ .tType = .SEMICOLON, .literal = ";" },
+        Token{ .tType = .INT, .literal = "5" },
+        Token{ .tType = .LT, .literal = "<" },
+        Token{ .tType = .INT, .literal = "10" },
+        Token{ .tType = .GT, .literal = ">" },
+        Token{ .tType = .INT, .literal = "5" },
+        Token{ .tType = .SEMICOLON, .literal = ";" },
+        Token{ .tType = .IF, .literal = "if" },
+        Token{ .tType = .LPAREN, .literal = "(" },
+        Token{ .tType = .INT, .literal = "5" },
+        Token{ .tType = .LT, .literal = "<" },
+        Token{ .tType = .INT, .literal = "10" },
+        Token{ .tType = .RPAREN, .literal = ")" },
+        Token{ .tType = .LBRACE, .literal = "{" },
+        Token{ .tType = .RETURN, .literal = "return" },
+        Token{ .tType = .TRUE, .literal = "true" },
+        Token{ .tType = .SEMICOLON, .literal = ";" },
+        Token{ .tType = .RBRACE, .literal = "}" },
+        Token{ .tType = .ELSE, .literal = "else" },
+        Token{ .tType = .LBRACE, .literal = "{" },
+        Token{ .tType = .RETURN, .literal = "return" },
+        Token{ .tType = .FALSE, .literal = "false" },
+        Token{ .tType = .SEMICOLON, .literal = ";" },
+        Token{ .tType = .RBRACE, .literal = "}" },
+        Token{ .tType = .INT, .literal = "10" },
+        Token{ .tType = .EQ, .literal = "==" },
+        Token{ .tType = .INT, .literal = "9" },
+        Token{ .tType = .INT, .literal = "10" },
+        Token{ .tType = .NOT_EQ, .literal = "!=" },
+        Token{ .tType = .INT, .literal = "9" },
+        Token{ .tType = .STRING, .literal = "foobar" },
+        Token{ .tType = .STRING, .literal = "foo bar" },
 
-//         // Token{ .tType = .EOF, .literal = "" },
-//     };
-//     var i: usize = 0;
-//     const arenaalloc = lexer.arenaAlloc.allocator();
-//     while (lexer.nextToken(arenaalloc)) |token| : (i += 1) {
-//         if (i >= expected_tokens.len) {
-//             break;
-//         }
-//         std.debug.print("\n{any} TokenLit {s} ExpectedLit {s} \n", .{ token.tType, token.literal, expected_tokens[i].literal });
-//         // try std.testing.expectEqual(expected_tokens[i].tType, token.tType);
-//     }
-// }
+        // Token{ .tType = .EOF, .literal = "" },
+    };
+    var i: usize = 0;
+    const arenaalloc = lexer.arenaAlloc.allocator();
+    while (lexer.nextToken(arenaalloc)) |token| : (i += 1) {
+        if (i >= expected_tokens.len) {
+            break;
+        }
+        // std.debug.print("\n{any} TokenLit {s} ExpectedLit {s} \n", .{ token.tType, token.literal, expected_tokens[i].literal });
+        try std.testing.expectEqual(expected_tokens[i].tType, token.tType);
+    }
+}

@@ -88,6 +88,11 @@ pub const Statement = union(enum) {
                         _ = list.writer().write(callString) catch unreachable;
                         callexp.allocator.free(callString);
                     },
+                    .stringLiteral => {
+                        const str = self.value.?.stringLiteral;
+                        _ = list.writer().write(str.value) catch unreachable;
+                        return list.writer().context.items;
+                    },
                 }
             }
             _ = list.writer().write(";\n") catch unreachable;
@@ -157,6 +162,11 @@ pub const Statement = union(enum) {
                         _ = list.writer().write(callString) catch unreachable;
                         callexp.allocator.free(callString);
                     },
+                    .stringLiteral => {
+                        const str = self.returnValue.?.stringLiteral;
+                        _ = list.writer().write(str.value) catch unreachable;
+                        return list.writer().context.items;
+                    },
                 }
             }
 
@@ -221,6 +231,12 @@ pub const Statement = union(enum) {
                         _ = list.writer().write(callString) catch unreachable;
                         callexp.allocator.free(callString);
                     },
+
+                    .stringLiteral => {
+                        const str = self.expression.?.stringLiteral;
+                        _ = list.writer().write(str.value) catch unreachable;
+                        return list.writer().context.items;
+                    },
                 }
             }
             return "";
@@ -237,6 +253,7 @@ pub const Expression = union(enum) {
     ifexp: IfExpression,
     function: FunctionLiteral,
     callExpression: CallExpression,
+    stringLiteral: StringLiteral,
 
     pub fn init(allocator: Allocator) *Expression {
         const exp = allocator.create(Expression) catch unreachable;
@@ -339,7 +356,20 @@ pub const Expression = union(enum) {
 
                 return allocator.destroy(self);
             },
+            else => {
+                return allocator.destroy(self);
+            },
         }
+    }
+};
+
+pub const StringLiteral = struct {
+    token: Token,
+    value: []const u8,
+    allocator: Allocator,
+
+    pub fn tokenLiteral(self: StringLiteral) []const u8 {
+        return self.token.literal;
     }
 };
 
@@ -385,6 +415,9 @@ pub const PrefixExpression = struct {
                 const callstring = call.string() catch unreachable;
                 _ = list.writer().write(callstring) catch unreachable;
                 call.allocator.free(callstring);
+            },
+            .stringLiteral => |str| {
+                _ = list.writer().write(str.value) catch unreachable;
             },
         };
 
@@ -437,6 +470,9 @@ pub const InfixExpression = struct {
                 _ = list.writer().write(callstring) catch unreachable;
                 call.allocator.free(callstring);
             },
+            .stringLiteral => |str| {
+                _ = list.writer().write(str.value) catch unreachable;
+            },
         }
         _ = list.writer().write(" ") catch unreachable;
         _ = list.writer().write(self.operator) catch unreachable;
@@ -469,6 +505,9 @@ pub const InfixExpression = struct {
                 const callstring = call.string() catch unreachable;
                 _ = list.writer().write(callstring) catch unreachable;
                 call.allocator.free(callstring);
+            },
+            .stringLiteral => |str| {
+                _ = list.writer().write(str.value) catch unreachable;
             },
         }
 
@@ -534,6 +573,9 @@ pub const IfExpression = struct {
                 const callstring = call.string() catch unreachable;
                 _ = list.writer().write(callstring) catch unreachable;
                 call.allocator.free(callstring);
+            },
+            .stringLiteral => |str| {
+                _ = list.writer().write(str.value) catch unreachable;
             },
         }
         _ = list.writer().write(" ") catch unreachable;
@@ -606,6 +648,10 @@ pub const CallExpression = struct {
                 _ = list.writer().write(callstring) catch unreachable;
                 call.allocator.free(callstring);
             },
+            .stringLiteral => |str| {
+                _ = list.writer().write(str.tokenLiteral()) catch unreachable;
+                // return list.writer().context.items;
+            },
         }
         _ = list.writer().write("(") catch unreachable;
         for (0.., self.arguments.?.items) |i, value| {
@@ -642,6 +688,9 @@ pub const CallExpression = struct {
                     _ = list.writer().write(callstring) catch unreachable;
                     // argList.append(callstring) catch unreachable;
                     call.allocator.free(callstring);
+                },
+                .stringLiteral => |str| {
+                    _ = list.writer().write(str.value) catch unreachable;
                 },
             }
 

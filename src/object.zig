@@ -2,6 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Ast = @import("./ast.zig");
 const Enviornment = @import("./environment.zig").Environment;
+pub const BuiltinFn = *const fn (args: []Object) Object;
 
 pub const ObjectType = enum(u8) {
     INTEGER_OBJ,
@@ -10,8 +11,9 @@ pub const ObjectType = enum(u8) {
     RETURN_OBJ,
     ERROR_OBJ,
     FUNCTION_OBJ,
+    STRING_OBJ,
+    BUILTIN_OBJ,
 };
-
 pub const Object = union(enum) {
     integer: Integer,
     boolean: Boolean,
@@ -19,7 +21,24 @@ pub const Object = union(enum) {
     nil: Nil,
     eror: Error,
     function: Function,
+    string: String,
+    builtin: Builtin,
 
+    pub const Builtin = struct {
+        Fn: BuiltinFn,
+        allocator: Allocator,
+        stop: bool = false,
+
+        pub fn inspect(self: Builtin) ![]const u8 {
+            _ = self;
+            return "builtin function";
+        }
+
+        pub fn oType(self: Builtin) ObjectType {
+            _ = self;
+            return ObjectType.BUILTIN_OBJ;
+        }
+    };
     pub const Function = struct {
         enviornment: *Enviornment,
         parameters: ?std.ArrayList(Ast.Identifier),
@@ -53,6 +72,10 @@ pub const Object = union(enum) {
             _ = list.writer().write("}") catch unreachable;
             return list.toOwnedSlice();
         }
+        pub fn oType(self: Function) ObjectType {
+            _ = self;
+            return ObjectType.FUNCTION_OBJ;
+        }
     };
 
     pub const Integer = struct {
@@ -69,12 +92,30 @@ pub const Object = union(enum) {
             return ObjectType.INTEGER_OBJ;
         }
     };
+    pub const String = struct {
+        stop: bool = false,
+        allocator: Allocator,
+        value: []const u8,
 
+        pub fn inspect(self: String) ![]const u8 {
+            return std.fmt.allocPrint(self.allocator, "\"{s}\"", .{self.value});
+        }
+
+        pub fn oType(self: String) ObjectType {
+            _ = self;
+            return ObjectType.STRING_OBJ;
+        }
+    };
     pub const Error = struct {
         message: []const u8,
         stop: bool = true,
         pub fn inspect(self: Error) []const u8 {
             return self.message;
+        }
+
+        pub fn oType(self: Error) ObjectType {
+            _ = self;
+            return ObjectType.ERROR_OBJ;
         }
     };
 

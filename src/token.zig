@@ -39,4 +39,7 @@ pub const TokenType = enum(u8) {
     IF,
     ELSE,
     RETURN,
+
+    //Datatypes
+    STRING,
 };

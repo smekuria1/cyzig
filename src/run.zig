@@ -56,6 +56,11 @@ pub fn run(allocator: Allocator, src: []u8) !void {
                 std.debug.print("Function {s}\n", .{funstring});
                 allocator.free(funstring);
             },
+            .string => |str| {
+                const strString = try str.inspect();
+                std.debug.print("String {s}\n", .{strString});
+                allocator.free(strString);
+            },
         }
     }
     // env.printEnvironment();
