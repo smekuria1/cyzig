@@ -30,6 +30,8 @@ pub const TokenType = enum(u8) {
     RPAREN,
     LBRACE,
     RBRACE,
+    LBRACKET,
+    RBRACKET,
     // Keywords
     FUNCTION,
     LET,

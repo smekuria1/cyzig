@@ -2,8 +2,46 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const Ast = @import("./ast.zig");
 const Enviornment = @import("./environment.zig").Environment;
-pub const BuiltinFn = *const fn (args: []Object) Object;
+pub const BuiltinFn = *const fn (allocator: Allocator, args: []?Object) Object;
+pub const builtFns = std.StaticStringMap(Object.Builtin).initComptime(
+    .{
+        .{
+            "len",
+            Object.Builtin{
+                .Fn = len,
+            },
+        },
+    },
+);
 
+fn len(allocator: Allocator, args: []?Object) Object {
+    if (args.len != 1) {
+        const message = std.fmt.allocPrint(allocator, "wrong number of arguments. got={d}, want=1", .{args.len}) catch unreachable;
+        return Object{ .eror = Object.Error{ .message = message } };
+    }
+    if (args[0]) |value| {
+        switch (value) {
+            .string => {
+                return Object{ .integer = Object.Integer{ .allocator = allocator, .value = @intCast(value.string.value.len) } };
+            },
+            .array => {
+                return Object{ .integer = Object.Integer{ .allocator = allocator, .value = @intCast(value.array.elements.len) } };
+            },
+            else => {
+                return Object.Error.newError(allocator, "argument to `len` not supported got ", getObjType(value)) catch unreachable;
+            },
+        }
+    }
+    return Object{ .nil = Object.Nil{} };
+}
+
+fn getObjType(o: Object) ObjectType {
+    return switch (o) {
+        inline else => |case| {
+            return case.oType();
+        },
+    };
+}
 pub const ObjectType = enum(u8) {
     INTEGER_OBJ,
     BOOLEAN_OBJ,
@@ -13,6 +51,7 @@ pub const ObjectType = enum(u8) {
     FUNCTION_OBJ,
     STRING_OBJ,
     BUILTIN_OBJ,
+    ARRAY_OBJ,
 };
 pub const Object = union(enum) {
     integer: Integer,
@@ -23,10 +62,46 @@ pub const Object = union(enum) {
     function: Function,
     string: String,
     builtin: Builtin,
+    array: Array,
 
+    pub fn stringer(self: Object) ![]const u8 {
+        switch (self) {
+            inline else => |case| {
+                return case.inspect();
+            },
+        }
+    }
+
+    pub const Array = struct {
+        elements: []?Object,
+        stop: bool = false,
+        allocator: Allocator,
+
+        pub fn oType(self: Array) ObjectType {
+            _ = self;
+            return ObjectType.ARRAY_OBJ;
+        }
+
+        pub fn inspect(self: Array) Allocator.Error![]const u8 {
+            var list = std.ArrayList(u8).init(self.allocator);
+            defer list.deinit();
+            _ = try list.writer().write("[");
+            for (0.., self.elements) |i, value| {
+                if (value) |obj| {
+                    const str = try obj.stringer();
+                    _ = try list.writer().write(str);
+                    if (i >= self.elements.len - 1) {
+                        continue;
+                    }
+                    _ = try list.writer().write(",");
+                }
+            }
+            _ = try list.writer().write("]");
+            return list.toOwnedSlice();
+        }
+    };
     pub const Builtin = struct {
         Fn: BuiltinFn,
-        allocator: Allocator,
         stop: bool = false,
 
         pub fn inspect(self: Builtin) ![]const u8 {
@@ -109,13 +184,18 @@ pub const Object = union(enum) {
     pub const Error = struct {
         message: []const u8,
         stop: bool = true,
-        pub fn inspect(self: Error) []const u8 {
+        pub fn inspect(self: Error) ![]const u8 {
             return self.message;
         }
 
         pub fn oType(self: Error) ObjectType {
             _ = self;
             return ObjectType.ERROR_OBJ;
+        }
+
+        pub fn newError(allocator: Allocator, message: []const u8, value: anytype) Allocator.Error!Object {
+            const allocMessage = try std.fmt.allocPrint(allocator, "{s} {any}", .{ message, value });
+            return Object{ .eror = Object.Error{ .message = allocMessage } };
         }
     };
 
@@ -157,7 +237,7 @@ pub const Object = union(enum) {
 
     pub const Nil = struct {
         stop: bool = false,
-        pub fn inspect(self: Nil) []const u8 {
+        pub fn inspect(self: Nil) ![]const u8 {
             _ = self;
             return "nil";
         }

@@ -12,7 +12,7 @@ pub fn main() !void {
         try run(allocator, file_content);
         defer allocator.free(file_content);
     } else {
-        std.debug.print("Welcome to Cyzig's REPL \nWAIIG in Zig", .{});
+        std.debug.print("Welcome to Cyzig's REPL \nWAIIG in Zig \n q to quit", .{});
         _ = try repl(allocator);
     }
     defer std.process.argsFree(allocator, args);

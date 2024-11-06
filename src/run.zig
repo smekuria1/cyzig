@@ -29,7 +29,7 @@ pub fn run(allocator: Allocator, src: []u8) !void {
     // std.debug.print("{s}", .{stringer.items});
 
     std.debug.print("\nOutput\n", .{});
-    const evaluated = Evaluator.Eval(Ast.Node{ .program = program }, env);
+    const evaluated = Evaluator.Eval(arenaAlloc, Ast.Node{ .program = program }, env);
 
     if (evaluated) |ev| {
         switch (ev) {
@@ -46,13 +46,13 @@ pub fn run(allocator: Allocator, src: []u8) !void {
                 std.debug.print("Return {s}\n", .{retstr});
             },
             .nil => |NULL| {
-                std.debug.print("Nil {s}\n", .{NULL.inspect()});
+                std.debug.print("Nil {s}\n", .{try NULL.inspect()});
             },
             .eror => |err| {
-                std.debug.print("Repl ERROR {s} \n", .{err.inspect()});
+                std.debug.print("Repl ERROR {s} \n", .{try err.inspect()});
             },
             .function => |fun| {
-                const funstring = fun.inspect() catch unreachable;
+                const funstring = try fun.inspect();
                 std.debug.print("Function {s}\n", .{funstring});
                 allocator.free(funstring);
             },
@@ -60,6 +60,15 @@ pub fn run(allocator: Allocator, src: []u8) !void {
                 const strString = try str.inspect();
                 std.debug.print("String {s}\n", .{strString});
                 allocator.free(strString);
+            },
+            .builtin => |built| {
+                const builtstr = try built.inspect();
+                std.debug.print("builtin {s}\n", .{builtstr});
+            },
+            .array => |array| {
+                const arrStr = try array.inspect();
+                std.debug.print("array {s}\n", .{arrStr});
+                allocator.free(arrStr);
             },
         }
     }

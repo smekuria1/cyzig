@@ -215,6 +215,12 @@ pub const Lexer = struct {
                 tok.tType = .STRING;
                 tok.literal = self.readString(arenaAllocator);
             },
+            '[' => {
+                tok = newToken(arenaAllocator, TokenType.LBRACKET, self.ch);
+            },
+            ']' => {
+                tok = newToken(arenaAllocator, TokenType.RBRACKET, self.ch);
+            },
 
             0 => {
                 tok.literal = "";
@@ -262,7 +268,7 @@ test "TestNextToken" {
         \\10 != 9
         \\ "foobar"
         \\ "foo bar"
-        \\
+        \\ [1,2]
     ;
 
     var lexer = Lexer.init(allocator, input);
@@ -342,6 +348,11 @@ test "TestNextToken" {
         Token{ .tType = .INT, .literal = "9" },
         Token{ .tType = .STRING, .literal = "foobar" },
         Token{ .tType = .STRING, .literal = "foo bar" },
+        Token{ .tType = .LBRACKET, .literal = "[" },
+        Token{ .tType = .INT, .literal = "1" },
+        Token{ .tType = .COMMA, .literal = "," },
+        Token{ .tType = .INT, .literal = "2" },
+        Token{ .tType = .RBRACKET, .literal = "]" },
 
         // Token{ .tType = .EOF, .literal = "" },
     };
