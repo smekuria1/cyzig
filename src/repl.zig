@@ -77,7 +77,7 @@ pub fn start(allocator: std.mem.Allocator) !void {
                 }
             }
             // env.printEnvironment();
-            // try pretty.print(allocator, env.store, .{ .max_depth = 30 });
+            // try pretty.print(allocator, env.store, .{ .max_depth = 100 });
             // std.debug.print("\n {any} \n", .{env.store.get("a")});
             // defer lexer.deinit();
             defer parser.deinit();

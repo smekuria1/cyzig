@@ -13,6 +13,7 @@ A small, fast and dynamically typed scripting language written in Zig. Inspired 
 - Builtins
   - len
   - rest
+  - push
 - Dynamic Arrays
 
 ## Installation

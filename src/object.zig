@@ -4,20 +4,47 @@ const Ast = @import("./ast.zig");
 const Enviornment = @import("./environment.zig").Environment;
 pub const BuiltinFn = *const fn (allocator: Allocator, args: []?Object) Object;
 pub const builtFns = std.StaticStringMap(Object.Builtin).initComptime(
-    .{
-        .{
-            "len",
-            Object.Builtin{
-                .Fn = len,
-            },
+    .{ .{
+        "len",
+        Object.Builtin{
+            .Fn = len,
         },
-        .{
-            "rest", Object.Builtin{
-                .Fn = rest,
-            },
+    }, .{
+        "rest", Object.Builtin{
+            .Fn = rest,
         },
-    },
+    }, .{
+        "push", Object.Builtin{
+            .Fn = push,
+        },
+    } },
 );
+
+fn push(allocator: Allocator, args: []?Object) Object {
+    if (args.len != 2) {
+        const message = std.fmt.allocPrint(allocator, "wrong number of arguments. got={d}, want=2", .{args.len}) catch unreachable;
+        return Object{ .eror = Object.Error{ .message = message } };
+    }
+    //TODO:Improve array appending and clearning up left over arrays
+    if (args[0]) |value| {
+        switch (value) {
+            .array => |arr| {
+                var newElements = std.ArrayList(?Object).init(allocator);
+                newElements.appendSlice(arr.elements) catch unreachable;
+                allocator.free(arr.elements);
+                newElements.append(args[1]) catch unreachable;
+                return Object{ .array = Object.Array{
+                    .elements = newElements.items,
+                    .allocator = allocator,
+                } };
+            },
+            else => {
+                return Object.Error.newError(allocator, "argument to `push` must be ARRAY_OBJ got", getObjType(value)) catch unreachable;
+            },
+        }
+    }
+    return Object{ .nil = Object.Nil{} };
+}
 
 fn rest(allocator: Allocator, args: []?Object) Object {
     if (args.len != 1) {

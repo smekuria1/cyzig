@@ -665,7 +665,7 @@ test "TestOperatorPrecedence" {
     try std.testing.expect(!parsercheck);
 
     // const stmt = program.statements.items[0];
-    try std.testing.expectEqualStrings("add((a * (b[2]), (b[1], (2 * ([1, 2][1]))", stringer.items);
+    try std.testing.expectEqualStrings("add((a * (b[2])), (b[1]), (2 * ([1, 2][1])))", stringer.items);
 }
 test "TestParsingIndexExpression" {
     const allocator = std.testing.allocator;

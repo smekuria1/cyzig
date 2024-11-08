@@ -72,7 +72,7 @@ pub fn run(allocator: Allocator, src: []u8) !void {
             },
         }
     }
-    // env.printEnvironment();
+    env.printEnvironment();
     // try pretty.print(allocator, env, .{ .max_depth = 30 });
     // std.debug.print("\n {any} \n", .{env.store.get("a")});
     defer lexer.deinit();

@@ -781,6 +781,8 @@ test "Test Recursive Functions" {
         TestStruct{ .expected = 12, .input = 
         \\let counter = fn(x) {
         \\if (x > 100) {
+        \\let p = 10000;
+        \\
         \\return true;
         \\} else {
         \\let foobar = 9999;

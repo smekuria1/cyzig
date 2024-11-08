@@ -1,4 +1,5 @@
 const std = @import("std");
+const Pretty = @import("./pretty.zig");
 const Object = @import("./object.zig").Object;
 const Allocator = std.mem.Allocator;
 pub const Environment = struct {
@@ -70,7 +71,8 @@ pub const Environment = struct {
         var iterator = self.store.iterator();
         while (iterator.next()) |entry| {
             std.debug.print("Key {s}\n", .{entry.key_ptr.*});
-            std.debug.print("Value {any} \n", .{entry.value_ptr.*});
+            // std.debug.print("Value {any} \n", .{entry.value_ptr.*});
+            Pretty.print(self.allocator, entry.value_ptr.*, .{ .max_depth = 100 }) catch unreachable;
         }
         if (self.outer) |out| {
             std.debug.print("Printing outer\n", .{});

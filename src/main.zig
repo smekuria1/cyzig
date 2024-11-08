@@ -8,6 +8,7 @@ pub fn main() !void {
     if (args.len == 2) {
         const filename = args[1];
         std.debug.print("Running file {s}\n", .{filename});
+        //TODO: Read file line by line to to stop eval from blowing stack
         const file_content = try std.fs.cwd().readFileAlloc(allocator, filename, std.math.maxInt(usize));
         try run(allocator, file_content);
         defer allocator.free(file_content);
