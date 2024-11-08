@@ -11,8 +11,39 @@ pub const builtFns = std.StaticStringMap(Object.Builtin).initComptime(
                 .Fn = len,
             },
         },
+        .{
+            "rest", Object.Builtin{
+                .Fn = rest,
+            },
+        },
     },
 );
+
+fn rest(allocator: Allocator, args: []?Object) Object {
+    if (args.len != 1) {
+        const message = std.fmt.allocPrint(allocator, "wrong number of arguments. got={d}, want=1", .{args.len}) catch unreachable;
+        return Object{ .eror = Object.Error{ .message = message } };
+    }
+    if (args[0]) |value| {
+        switch (value) {
+            .array => |arr| {
+                const length = arr.elements.len;
+                if (length > 0) {
+                    var newElements = std.ArrayList(?Object).init(allocator);
+                    newElements.appendSlice(arr.elements[1..length]) catch unreachable;
+                    return Object{ .array = Object.Array{
+                        .elements = newElements.items,
+                        .allocator = allocator,
+                    } };
+                }
+            },
+            else => {
+                return Object.Error.newError(allocator, "argument to `rest` must be ARRAY_OBJ got", getObjType(value)) catch unreachable;
+            },
+        }
+    }
+    return Object{ .nil = Object.Nil{} };
+}
 
 fn len(allocator: Allocator, args: []?Object) Object {
     if (args.len != 1) {
@@ -28,7 +59,7 @@ fn len(allocator: Allocator, args: []?Object) Object {
                 return Object{ .integer = Object.Integer{ .allocator = allocator, .value = @intCast(value.array.elements.len) } };
             },
             else => {
-                return Object.Error.newError(allocator, "argument to `len` not supported got ", getObjType(value)) catch unreachable;
+                return Object.Error.newError(allocator, "argument to `len` not supported got", getObjType(value)) catch unreachable;
             },
         }
     }

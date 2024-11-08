@@ -832,6 +832,7 @@ pub const IndexExpression = struct {
             }
         }
         _ = list.writer().write("]") catch unreachable;
+        _ = list.writer().write(")") catch unreachable;
         return list.toOwnedSlice();
     }
 };

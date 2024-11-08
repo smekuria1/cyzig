@@ -417,6 +417,7 @@ fn evalIntegerInfixExpression(allocator: Allocator, operator: []const u8, left: 
     const leftval = left.value;
     const rightval = right.value;
 
+    //TODO: Overflow Occurs here use zig's overflow builtins or use wrapping
     switch (operator[0]) {
         '+' => return Object{
             .integer = Object.Integer{ .allocator = allocator, .value = leftval + rightval },
