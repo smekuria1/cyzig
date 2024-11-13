@@ -122,6 +122,10 @@ pub fn Eval(arenaAlloc: Allocator, node: Ast.Node, environment: *Environment) ?O
                         .allocator = arr.allocator,
                     } };
                 },
+                .hashLiteral => |hash| {
+                    _ = hash;
+                    @panic("Not implemented");
+                },
             }
         },
         .statement => |stmt| {
@@ -137,6 +141,7 @@ pub fn Eval(arenaAlloc: Allocator, node: Ast.Node, environment: *Environment) ?O
                         //std.debug.print("\n{any}\n", .{exp});
                         const obj = Eval(arenaAlloc, Ast.Node{ .expression = exp.* }, environment);
                         // std.debug.print("let.name in statement eval {s}\n", .{let.name.value});
+
                         environment.put(let.name.value, obj.?);
                         // std.debug.print("After put statement Store {any} \n", .{environment.store.get(let.name.value).?});
                         return obj;
@@ -236,7 +241,9 @@ fn extendFunctionEnv(fun: Object.Function, args: []?Object) *Environment {
     var env = Environment.initEnclosed(fun.enviornment) catch unreachable;
     if (fun.parameters) |params| {
         for (0.., params.items) |pId, param| {
-            env.put(param.string(), args[pId].?);
+            const key = param.string() catch unreachable;
+            env.put(key, args[pId].?);
+            param.allocator.free(key);
         }
     }
     fun.allocatorr.free(args);
@@ -530,6 +537,7 @@ fn evalBlockStatements(arenaAlloc: Allocator, block: Ast.BlockStatement, environ
                     const evaluated = Eval(arenaAlloc, Ast.Node{ .expression = exp.* }, environment);
                     if (evaluated) |ev| {
                         result = ev;
+                        environment.put(let.name.value, result);
                     }
                 }
             },
@@ -840,7 +848,9 @@ test "TestFunctionObject" {
             .function => |fun| {
                 if (fun.parameters) |params| {
                     try std.testing.expectEqual(1, params.items.len);
-                    try std.testing.expectEqualSlices(u8, "x", params.items[0].string());
+                    const paramstr = try params.items[0].string();
+                    try std.testing.expectEqualSlices(u8, "x", paramstr);
+                    params.items[0].allocator.free(paramstr);
                 }
                 const bodyString = try fun.body.?.string();
                 try std.testing.expectEqualSlices(u8, "(x + 2)", bodyString);

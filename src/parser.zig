@@ -63,6 +63,7 @@ pub const Parser = struct {
         parser.registerPrefix(.FUNCTION, parseFunctionLiteral) catch unreachable;
         parser.registerPrefix(.STRING, parseStringLiteral) catch unreachable;
         parser.registerPrefix(.LBRACKET, parseArrayLitreal) catch unreachable;
+        parser.registerPrefix(.LBRACE, parseHashLiteral) catch unreachable;
 
         parser.infixParseFns = Ast.GenericAst(infixParseFn).init(allocator) catch unreachable;
         parser.registerInfix(.PLUS, parseInfixExpression) catch unreachable;
@@ -158,6 +159,7 @@ pub const Parser = struct {
 
         return program;
     }
+
     pub fn parseIndexExpression(self: *Parser, left: *Ast.Expression) ?*Ast.Expression {
         var exp = Ast.IndexExpression{
             .index = null,
@@ -180,6 +182,35 @@ pub const Parser = struct {
         };
         return indexExp;
     }
+    pub fn parseHashLiteral(self: *Parser) ?*Ast.Expression {
+        var hash = Ast.HashLiteral{
+            .allocator = self.allocator,
+            .token = self.curToken,
+            .pairs = undefined,
+        };
+        hash.pairs = std.AutoHashMap(*Ast.Expression, *Ast.Expression).init(hash.allocator);
+        //TODO: Fix optional
+        while (!self.peekTokenIs(.LBRACE)) {
+            self.nextToken(self.l.arenaAlloc.allocator());
+            const key = self.parseExpression(.LOWEST) orelse null;
+            if (!self.expectPeek(.COLON)) {
+                return null;
+            }
+            self.nextToken(self.l.arenaAlloc.allocator());
+            const value = self.parseExpression(.LOWEST) orelse null;
+            hash.pairs.put(key.?, value.?) catch unreachable;
+            if (!self.peekTokenIs(.RBRACE) and !self.expectPeek(.COMMA)) {
+                return null;
+            }
+        }
+        if (!self.expectPeek(.RBRACE)) {
+            return null;
+        }
+        const exp = Ast.Expression.init(self.allocator);
+        exp.* = Ast.Expression{ .hashLiteral = hash };
+        return exp;
+    }
+
     pub fn parseStringLiteral(self: *Parser) ?*Ast.Expression {
         const exp = Ast.Expression.init(self.allocator);
         exp.* = Ast.Expression{ .stringLiteral = Ast.StringLiteral{
@@ -547,10 +578,11 @@ pub const Parser = struct {
     pub fn parseExpression(self: *Parser, prec: Precedence) ?*Ast.Expression {
         // self.printTables();
         /////////TODO:
-        // std.debug.print("{any}\n", .{self.curToken.tType});
+        std.debug.print("Parsing {s}\n", .{self.curToken.literal});
         // std.debug.print("\nParse Funtion {any}\n", .{self.prefixParseFns.list[6]});
         const prefExists = self.prefixParseFns.filled.get(@intFromEnum(self.curToken.tType));
         if (prefExists == null) {
+            // std.debug.print("Prefix fn not found for {any}\n", .{self.curToken.tType});
             self.noPrefixParseFnError(self.curToken.tType);
             return null;
         }
@@ -648,6 +680,23 @@ pub const Parser = struct {
         }
     }
 };
+//TODO: Add more Hash testing
+test "TesHashLiterals" {
+    const allocator = std.testing.allocator;
+    const input =
+        \\{"one": 1, "two": 2, "three": 3}
+    ;
+    var l = Lexer.init(allocator, input);
+    defer l.deinit();
+    var parser = Parser.init(allocator, l);
+    var program = parser.parseProgram();
+    const stringer = try program.string();
+    defer program.deinit();
+    defer parser.deinit();
+    defer stringer.deinit();
+    const parsercheck = parser.checkParserErros();
+    try std.testing.expect(!parsercheck);
+}
 test "TestOperatorPrecedence" {
     const allocator = std.testing.allocator;
     const input =

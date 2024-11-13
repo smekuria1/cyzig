@@ -129,7 +129,7 @@ pub const Object = union(enum) {
             },
         }
     }
-
+    //Immutable Zig slices
     pub const Array = struct {
         elements: []?Object,
         stop: bool = false,
@@ -185,7 +185,7 @@ pub const Object = union(enum) {
             defer paramlist.deinit();
 
             for (0.., self.parameters.?.items) |i, value| {
-                paramlist.append(value.string()) catch unreachable;
+                paramlist.append(value.string() catch unreachable) catch unreachable;
                 if (i >= self.parameters.?.items.len - 1) {
                     continue;
                 }

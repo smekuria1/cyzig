@@ -54,12 +54,12 @@ pub fn run(allocator: Allocator, src: []u8) !void {
             .function => |fun| {
                 const funstring = try fun.inspect();
                 std.debug.print("Function {s}\n", .{funstring});
-                allocator.free(funstring);
+                // allocator.free(funstring);
             },
             .string => |str| {
                 const strString = try str.inspect();
                 std.debug.print("String {s}\n", .{strString});
-                allocator.free(strString);
+                // allocator.free(strString);
             },
             .builtin => |built| {
                 const builtstr = try built.inspect();
@@ -68,11 +68,11 @@ pub fn run(allocator: Allocator, src: []u8) !void {
             .array => |array| {
                 const arrStr = try array.inspect();
                 std.debug.print("array {s}\n", .{arrStr});
-                allocator.free(arrStr);
+                // allocator.free(arrStr);
             },
         }
     }
-    env.printEnvironment();
+    // env.printEnvironment();
     // try pretty.print(allocator, env, .{ .max_depth = 30 });
     // std.debug.print("\n {any} \n", .{env.store.get("a")});
     defer lexer.deinit();

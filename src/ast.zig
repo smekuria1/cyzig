@@ -42,13 +42,15 @@ pub const Statement = union(enum) {
                 //TODO: add Prefix printing abstract it out before tho
                 switch (value.*) {
                     .identifier => {
-                        const tmp = self.value.?.identifier.string();
+                        const tmp = self.value.?.identifier.string() catch unreachable;
                         _ = list.writer().write(tmp) catch unreachable;
+                        self.value.?.identifier.allocator.free(tmp);
                         return list.writer().context.items;
                     },
                     .integerLiteral => {
-                        const tmp = self.value.?.integerLiteral.string();
+                        const tmp = self.value.?.integerLiteral.string() catch unreachable;
                         _ = list.writer().write(tmp) catch unreachable;
+                        self.value.?.integerLiteral.allocator.free(tmp);
                         return list.writer().context.items;
                     },
                     .prefixExp => {
@@ -66,8 +68,9 @@ pub const Statement = union(enum) {
                         return "";
                     },
                     .boolean => {
-                        const tmp = self.value.?.*.boolean.string();
+                        const tmp = self.value.?.*.boolean.string() catch unreachable;
                         _ = list.writer().write(tmp) catch unreachable;
+                        self.value.?.boolean.allocator.free(tmp);
                         return list.writer().context.items;
                     },
                     .ifexp => {
@@ -105,6 +108,12 @@ pub const Statement = union(enum) {
                         _ = list.writer().write(indexString) catch unreachable;
                         index.allocator.free(indexString);
                     },
+                    .hashLiteral => {
+                        const hash = self.value.?.hashLiteral;
+                        const hashString = hash.string() catch unreachable;
+                        _ = list.writer().write(hashString) catch unreachable;
+                        hash.allocator.free(hashString);
+                    },
                 }
             }
             _ = list.writer().write(";\n") catch unreachable;
@@ -128,13 +137,15 @@ pub const Statement = union(enum) {
             if (self.returnValue) |value| {
                 switch (value.*) {
                     .identifier => {
-                        const tmp = self.returnValue.?.identifier.string();
+                        const tmp = self.returnValue.?.identifier.string() catch unreachable;
                         _ = list.writer().write(tmp) catch unreachable;
+                        self.returnValue.?.identifier.allocator.free(tmp);
                         return list.writer().context.items;
                     },
                     .integerLiteral => {
-                        const tmp = self.returnValue.?.integerLiteral.string();
+                        const tmp = self.returnValue.?.integerLiteral.string() catch unreachable;
                         _ = list.writer().write(tmp) catch unreachable;
+                        self.returnValue.?.integerLiteral.allocator.free(tmp);
                         return list.writer().context.items;
                     },
                     .prefixExp => {
@@ -152,8 +163,9 @@ pub const Statement = union(enum) {
                         return "";
                     },
                     .boolean => {
-                        const tmp = self.returnValue.?.*.boolean.string();
+                        const tmp = self.returnValue.?.*.boolean.string() catch unreachable;
                         _ = list.writer().write(tmp) catch unreachable;
+                        self.returnValue.?.boolean.allocator.free(tmp);
                         return list.writer().context.items;
                     },
                     .ifexp => {
@@ -191,6 +203,12 @@ pub const Statement = union(enum) {
                         _ = list.writer().write(indexString) catch unreachable;
                         index.allocator.free(indexString);
                     },
+                    .hashLiteral => {
+                        const hash = self.returnValue.?.hashLiteral;
+                        const hashString = hash.string() catch unreachable;
+                        _ = list.writer().write(hashString) catch unreachable;
+                        hash.allocator.free(hashString);
+                    },
                 }
             }
 
@@ -209,13 +227,15 @@ pub const Statement = union(enum) {
             if (self.expression != null) {
                 switch (self.expression.?.*) {
                     .identifier => {
-                        const tmp = self.expression.?.identifier.string();
+                        const tmp = self.expression.?.identifier.string() catch unreachable;
                         _ = list.writer().write(tmp) catch unreachable;
+                        self.expression.?.identifier.allocator.free(tmp);
                         return list.writer().context.items;
                     },
                     .integerLiteral => {
-                        const tmp = self.expression.?.integerLiteral.string();
+                        const tmp = self.expression.?.integerLiteral.string() catch unreachable;
                         _ = list.writer().write(tmp) catch unreachable;
+                        self.expression.?.integerLiteral.allocator.free(tmp);
                         return list.writer().context.items;
                     },
                     .prefixExp => {
@@ -233,8 +253,9 @@ pub const Statement = union(enum) {
                         return "";
                     },
                     .boolean => {
-                        const tmp = self.expression.?.boolean.string();
+                        const tmp = self.expression.?.boolean.string() catch unreachable;
                         _ = list.writer().write(tmp) catch unreachable;
+                        self.expression.?.boolean.allocator.free(tmp);
                         return list.writer().context.items;
                     },
                     .ifexp => {
@@ -273,6 +294,12 @@ pub const Statement = union(enum) {
                         _ = list.writer().write(indexString) catch unreachable;
                         index.allocator.free(indexString);
                     },
+                    .hashLiteral => {
+                        const hash = self.expression.?.hashLiteral;
+                        const hashString = hash.string() catch unreachable;
+                        _ = list.writer().write(hashString) catch unreachable;
+                        hash.allocator.free(hashString);
+                    },
                 }
             }
             return "";
@@ -292,10 +319,19 @@ pub const Expression = union(enum) {
     stringLiteral: StringLiteral,
     arrayLiteral: ArrayLiteral,
     indexExpression: IndexExpression,
+    hashLiteral: HashLiteral,
 
     pub fn init(allocator: Allocator) *Expression {
         const exp = allocator.create(Expression) catch unreachable;
         return exp;
+    }
+
+    pub fn string(self: *Expression) Allocator.Error![]u8 {
+        switch (self.*) {
+            inline else => |case| {
+                return case.string();
+            },
+        }
     }
 
     pub fn deinit(self: *Expression, allocator: Allocator) void {
@@ -410,10 +446,51 @@ pub const Expression = union(enum) {
                 indexExpr.left.deinit(allocator);
                 return allocator.destroy(self);
             },
+            .hashLiteral => |hash| {
+                // hash.pairs.deinit();
+                var iter = hash.pairs.iterator();
+                while (iter.next()) |entry| {
+                    entry.key_ptr.*.deinit(allocator);
+                    entry.value_ptr.*.deinit(allocator);
+                }
+                //TODO: FIX THIS SHIT
+                var x = @constCast(&hash.pairs);
+                x.deinit();
+                return allocator.destroy(self);
+            },
             else => {
                 return allocator.destroy(self);
             },
         }
+    }
+};
+
+pub const HashLiteral = struct {
+    token: Token,
+    allocator: Allocator,
+    pairs: std.AutoHashMap(*Expression, *Expression),
+
+    pub fn tokenLiteral(self: HashLiteral) []const u8 {
+        return self.token.literal;
+    }
+
+    pub fn string(self: HashLiteral) Allocator.Error![]u8 {
+        var list = std.ArrayList(u8).init(self.allocator);
+        var iter = self.pairs.iterator();
+        try list.writer().writeAll("{");
+        while (iter.next()) |entry| {
+            const k = try entry.key_ptr.*.string();
+            const v = try entry.value_ptr.*.string();
+
+            _ = try list.writer().write(k);
+            _ = try list.writer().write(":");
+            _ = try list.writer().write(v);
+            _ = try list.writer().write(",");
+            self.allocator.free(k);
+            self.allocator.free(v);
+        }
+        try list.writer().writeAll("}");
+        return list.toOwnedSlice();
     }
 };
 
@@ -424,6 +501,15 @@ pub const StringLiteral = struct {
 
     pub fn tokenLiteral(self: StringLiteral) []const u8 {
         return self.token.literal;
+    }
+
+    pub fn string(self: StringLiteral) Allocator.Error![]u8 {
+
+        // Allocate a mutable array with the same length as self.value
+        const buffer = try self.allocator.alloc(u8, self.value.len);
+        // Copy contents from self.value ([]const u8) to buffer ([]u8)
+        @memcpy(buffer, self.value);
+        return buffer;
     }
 };
 
@@ -439,52 +525,72 @@ pub const PrefixExpression = struct {
 
     pub fn string(self: PrefixExpression) Allocator.Error![]u8 {
         var list = std.ArrayList(u8).init(self.allocator);
-        _ = list.writer().write("(") catch unreachable;
-        _ = list.writer().write(self.operator) catch unreachable;
-        _ = switch (self.right.*) {
-            .identifier => |id| list.writer().write(id.string()) catch unreachable,
-            .integerLiteral => |int| list.writer().write(int.string()) catch unreachable,
-            .infixExp => |in| {
-                const infixStrng = in.string() catch unreachable;
-                _ = list.writer().write(infixStrng) catch unreachable;
-                in.allocator.free(infixStrng);
-            },
-            .prefixExp => |pf| {
-                const prefixStrng = pf.string() catch unreachable;
-                _ = list.writer().write(prefixStrng) catch unreachable;
-                pf.allocator.free(prefixStrng);
-            },
-            .boolean => |boo| list.writer().write(boo.string()) catch unreachable,
-            .ifexp => |ifexpression| {
-                const ifString = ifexpression.string() catch unreachable;
-                _ = list.writer().write(ifString) catch unreachable;
-                ifexpression.allocator.free(ifString);
-            },
-            .function => |fun| {
-                const funString = fun.string() catch unreachable;
-                _ = list.writer().write(funString) catch unreachable;
-                fun.allocator.free(funString);
-            },
-            .callExpression => |call| {
-                const callstring = call.string() catch unreachable;
-                _ = list.writer().write(callstring) catch unreachable;
-                call.allocator.free(callstring);
-            },
-            .stringLiteral => |str| {
-                _ = list.writer().write(str.value) catch unreachable;
-            },
-            .arrayLiteral => |arr| {
-                const arrString = arr.string() catch unreachable;
-                _ = list.writer().write(arrString) catch unreachable;
-                arr.allocator.free(arrString);
-            },
-            .indexExpression => |index| {
-                const indexString = index.string() catch unreachable;
-                _ = list.writer().write(indexString) catch unreachable;
-                index.allocator.free(indexString);
-            },
-        };
-
+        try list.writer().writeAll("(");
+        try list.writer().writeAll(self.operator);
+        const rightstr = try self.right.string();
+        try list.writer().writeAll(rightstr);
+        self.allocator.free(rightstr);
+        // _ = switch (self.right.*) {
+        //     .identifier => |id| {
+        //         const tmp = try id.string();
+        //         try list.writer().writeAll(tmp);
+        //         id.allocator.free(tmp);
+        //     },
+        //     .integerLiteral => |int| {
+        //         const tmp = try int.string();
+        //         try list.writer().writeAll(tmp);
+        //         int.allocator.free(tmp);
+        //     },
+        //     .infixExp => |in| {
+        //         const infixStrng = in.string() catch unreachable;
+        //         _ = list.writer().write(infixStrng) catch unreachable;
+        //         in.allocator.free(infixStrng);
+        //     },
+        //     .prefixExp => |pf| {
+        //         const prefixStrng = pf.string() catch unreachable;
+        //         _ = list.writer().write(prefixStrng) catch unreachable;
+        //         pf.allocator.free(prefixStrng);
+        //     },
+        //     .boolean => |boo| {
+        //         const tmp = try boo.string();
+        //         try list.writer().writeAll(tmp);
+        //         boo.allocator.free(tmp);
+        //     },
+        //     .ifexp => |ifexpression| {
+        //         const ifString = ifexpression.string() catch unreachable;
+        //         _ = list.writer().write(ifString) catch unreachable;
+        //         ifexpression.allocator.free(ifString);
+        //     },
+        //     .function => |fun| {
+        //         const funString = fun.string() catch unreachable;
+        //         _ = list.writer().write(funString) catch unreachable;
+        //         fun.allocator.free(funString);
+        //     },
+        //     .callExpression => |call| {
+        //         const callstring = call.string() catch unreachable;
+        //         _ = list.writer().write(callstring) catch unreachable;
+        //         call.allocator.free(callstring);
+        //     },
+        //     .stringLiteral => |str| {
+        //         _ = list.writer().write(str.value) catch unreachable;
+        //     },
+        //     .arrayLiteral => |arr| {
+        //         const arrString = arr.string() catch unreachable;
+        //         _ = list.writer().write(arrString) catch unreachable;
+        //         arr.allocator.free(arrString);
+        //     },
+        //     .indexExpression => |index| {
+        //         const indexString = index.string() catch unreachable;
+        //         _ = list.writer().write(indexString) catch unreachable;
+        //         index.allocator.free(indexString);
+        //     },
+        //     .hashLiteral => |hash| {
+        //         const hashStr = hash.string() catch unreachable;
+        //         _ = list.writer().write(hashStr) catch unreachable;
+        //         hash.allocator.free(hashStr);
+        //     },
+        // };
+        //
         _ = list.writer().write(")") catch unreachable;
 
         return list.toOwnedSlice();
@@ -505,95 +611,135 @@ pub const InfixExpression = struct {
     pub fn string(self: InfixExpression) Allocator.Error![]u8 {
         var list = std.ArrayList(u8).init(self.allocator);
         _ = list.writer().write("(") catch unreachable;
-        switch (self.left.*) {
-            .identifier => |id| _ = list.writer().write(id.string()) catch unreachable,
-            .integerLiteral => |int| _ = list.writer().write(int.string()) catch unreachable,
-            .prefixExp => |pf| {
-                const prefixStrng = pf.string() catch unreachable;
-                _ = list.writer().write(prefixStrng) catch unreachable;
-                pf.allocator.free(prefixStrng);
-            },
-            .infixExp => |in| {
-                const infixStrng = in.string() catch unreachable;
-                _ = list.writer().write(infixStrng) catch unreachable;
-                in.allocator.free(infixStrng);
-            },
-            .boolean => |boo| _ = list.writer().write(boo.string()) catch unreachable,
-            .ifexp => |ifexpression| {
-                const ifString = ifexpression.string() catch unreachable;
-                _ = list.writer().write(ifString) catch unreachable;
-                ifexpression.allocator.free(ifString);
-            },
-            .function => |fun| {
-                const funString = fun.string() catch unreachable;
-                _ = list.writer().write(funString) catch unreachable;
-                fun.allocator.free(funString);
-            },
-            .callExpression => |call| {
-                const callstring = call.string() catch unreachable;
-                _ = list.writer().write(callstring) catch unreachable;
-                call.allocator.free(callstring);
-            },
-            .stringLiteral => |str| {
-                _ = list.writer().write(str.value) catch unreachable;
-            },
-            .arrayLiteral => |arr| {
-                const arrString = arr.string() catch unreachable;
-                _ = list.writer().write(arrString) catch unreachable;
-                arr.allocator.free(arrString);
-            },
-            .indexExpression => |index| {
-                const indexString = index.string() catch unreachable;
-                _ = list.writer().write(indexString) catch unreachable;
-                index.allocator.free(indexString);
-            },
-        }
-        _ = list.writer().write(" ") catch unreachable;
-        _ = list.writer().write(self.operator) catch unreachable;
-        _ = list.writer().write(" ") catch unreachable;
-        switch (self.right.*) {
-            .identifier => |id| _ = list.writer().write(id.string()) catch unreachable,
-            .integerLiteral => |int| _ = list.writer().write(int.string()) catch unreachable,
-            .prefixExp => |pf| {
-                const prefixString = pf.string() catch unreachable;
-                _ = list.writer().write(prefixString) catch unreachable;
-                pf.allocator.free(prefixString);
-            },
-            .infixExp => |in| {
-                const infixStrng = in.string() catch unreachable;
-                _ = list.writer().write(infixStrng) catch unreachable;
-                in.allocator.free(infixStrng);
-            },
-            .boolean => |boo| _ = list.writer().write(boo.string()) catch unreachable,
-            .ifexp => |ifexpression| {
-                const ifString = ifexpression.string() catch unreachable;
-                _ = list.writer().write(ifString) catch unreachable;
-                ifexpression.allocator.free(ifString);
-            },
-            .function => |fun| {
-                const funString = fun.string() catch unreachable;
-                _ = list.writer().write(funString) catch unreachable;
-                fun.allocator.free(funString);
-            },
-            .callExpression => |call| {
-                const callstring = call.string() catch unreachable;
-                _ = list.writer().write(callstring) catch unreachable;
-                call.allocator.free(callstring);
-            },
-            .stringLiteral => |str| {
-                _ = list.writer().write(str.value) catch unreachable;
-            },
-            .arrayLiteral => |arr| {
-                const arrString = arr.string() catch unreachable;
-                _ = list.writer().write(arrString) catch unreachable;
-                arr.allocator.free(arrString);
-            },
-            .indexExpression => |index| {
-                const indexString = index.string() catch unreachable;
-                _ = list.writer().write(indexString) catch unreachable;
-                index.allocator.free(indexString);
-            },
-        }
+        const leftstr = try self.left.string();
+        try list.writer().writeAll(leftstr);
+        self.allocator.free(leftstr);
+        // switch (self.left.*) {
+        //     .identifier => |id| {
+        //         const tmp = try id.string();
+        //         try list.writer().writeAll(tmp);
+        //         id.allocator.free(tmp);
+        //     },
+        //     .integerLiteral => |int| {
+        //         const tmp = try int.string();
+        //         try list.writer().writeAll(tmp);
+        //         int.allocator.free(tmp);
+        //     },
+        //     .infixExp => |in| {
+        //         const infixStrng = in.string() catch unreachable;
+        //         _ = list.writer().write(infixStrng) catch unreachable;
+        //         in.allocator.free(infixStrng);
+        //     },
+        //     .prefixExp => |pf| {
+        //         const prefixStrng = pf.string() catch unreachable;
+        //         _ = list.writer().write(prefixStrng) catch unreachable;
+        //         pf.allocator.free(prefixStrng);
+        //     },
+        //     .boolean => |boo| {
+        //         const tmp = try boo.string();
+        //         try list.writer().writeAll(tmp);
+        //         boo.allocator.free(tmp);
+        //     },
+        //     .ifexp => |ifexpression| {
+        //         const ifString = ifexpression.string() catch unreachable;
+        //         _ = list.writer().write(ifString) catch unreachable;
+        //         ifexpression.allocator.free(ifString);
+        //     },
+        //     .function => |fun| {
+        //         const funString = fun.string() catch unreachable;
+        //         _ = list.writer().write(funString) catch unreachable;
+        //         fun.allocator.free(funString);
+        //     },
+        //     .callExpression => |call| {
+        //         const callstring = call.string() catch unreachable;
+        //         _ = list.writer().write(callstring) catch unreachable;
+        //         call.allocator.free(callstring);
+        //     },
+        //     .stringLiteral => |str| {
+        //         _ = list.writer().write(str.value) catch unreachable;
+        //     },
+        //     .arrayLiteral => |arr| {
+        //         const arrString = arr.string() catch unreachable;
+        //         _ = list.writer().write(arrString) catch unreachable;
+        //         arr.allocator.free(arrString);
+        //     },
+        //     .indexExpression => |index| {
+        //         const indexString = index.string() catch unreachable;
+        //         _ = list.writer().write(indexString) catch unreachable;
+        //         index.allocator.free(indexString);
+        //     },
+        //     .hashLiteral => |hash| {
+        //         const hashStr = hash.string() catch unreachable;
+        //         _ = list.writer().write(hashStr) catch unreachable;
+        //         hash.allocator.free(hashStr);
+        //     },
+        // }
+        try list.writer().writeAll(" ");
+        try list.writer().writeAll(self.operator);
+        try list.writer().writeAll(" ");
+        const rightstr = try self.right.string();
+        try list.writer().writeAll(rightstr);
+        self.allocator.free(rightstr);
+        // switch (self.right.*) {
+        //     .identifier => |id| {
+        //         const tmp = try id.string();
+        //         try list.writer().writeAll(tmp);
+        //         id.allocator.free(tmp);
+        //     },
+        //     .integerLiteral => |int| {
+        //         const tmp = try int.string();
+        //         try list.writer().writeAll(tmp);
+        //         int.allocator.free(tmp);
+        //     },
+        //     .infixExp => |in| {
+        //         const infixStrng = in.string() catch unreachable;
+        //         _ = list.writer().write(infixStrng) catch unreachable;
+        //         in.allocator.free(infixStrng);
+        //     },
+        //     .prefixExp => |pf| {
+        //         const prefixStrng = pf.string() catch unreachable;
+        //         _ = list.writer().write(prefixStrng) catch unreachable;
+        //         pf.allocator.free(prefixStrng);
+        //     },
+        //     .boolean => |boo| {
+        //         const tmp = try boo.string();
+        //         try list.writer().writeAll(tmp);
+        //         boo.allocator.free(tmp);
+        //     },
+        //     .ifexp => |ifexpression| {
+        //         const ifString = ifexpression.string() catch unreachable;
+        //         _ = list.writer().write(ifString) catch unreachable;
+        //         ifexpression.allocator.free(ifString);
+        //     },
+        //     .function => |fun| {
+        //         const funString = fun.string() catch unreachable;
+        //         _ = list.writer().write(funString) catch unreachable;
+        //         fun.allocator.free(funString);
+        //     },
+        //     .callExpression => |call| {
+        //         const callstring = call.string() catch unreachable;
+        //         _ = list.writer().write(callstring) catch unreachable;
+        //         call.allocator.free(callstring);
+        //     },
+        //     .stringLiteral => |str| {
+        //         _ = list.writer().write(str.value) catch unreachable;
+        //     },
+        //     .arrayLiteral => |arr| {
+        //         const arrString = arr.string() catch unreachable;
+        //         _ = list.writer().write(arrString) catch unreachable;
+        //         arr.allocator.free(arrString);
+        //     },
+        //     .indexExpression => |index| {
+        //         const indexString = index.string() catch unreachable;
+        //         _ = list.writer().write(indexString) catch unreachable;
+        //         index.allocator.free(indexString);
+        //     },
+        //     .hashLiteral => |hash| {
+        //         const hashStr = hash.string() catch unreachable;
+        //         _ = list.writer().write(hashStr) catch unreachable;
+        //         hash.allocator.free(hashStr);
+        //     },
+        // }
 
         _ = list.writer().write(")") catch unreachable;
 
@@ -617,12 +763,12 @@ pub const IfExpression = struct {
         _ = list.writer().write("if") catch unreachable;
         switch (self.condition.*) {
             .identifier => {
-                const tmp = self.condition.identifier.string();
+                const tmp = self.condition.identifier.string() catch unreachable;
                 _ = list.writer().write(tmp) catch unreachable;
                 // return list.writer().context.items;
             },
             .integerLiteral => {
-                const tmp = self.condition.integerLiteral.string();
+                const tmp = self.condition.integerLiteral.string() catch unreachable;
                 _ = list.writer().write(tmp) catch unreachable;
                 // return list.writer().context.items;
             },
@@ -639,7 +785,7 @@ pub const IfExpression = struct {
                 infix.allocator.free(infixStrng);
             },
             .boolean => {
-                const tmp = self.condition.boolean.string();
+                const tmp = self.condition.boolean.string() catch unreachable;
                 _ = list.writer().write(tmp) catch unreachable;
                 // return list.writer().context.items;
             },
@@ -670,6 +816,11 @@ pub const IfExpression = struct {
                 const indexString = index.string() catch unreachable;
                 _ = list.writer().write(indexString) catch unreachable;
                 index.allocator.free(indexString);
+            },
+            .hashLiteral => |hash| {
+                const hashStr = hash.string() catch unreachable;
+                _ = list.writer().write(hashStr) catch unreachable;
+                hash.allocator.free(hashStr);
             },
         }
         _ = list.writer().write(" ") catch unreachable;
@@ -700,137 +851,155 @@ pub const IndexExpression = struct {
         var list = std.ArrayList(u8).init(self.allocator);
 
         _ = list.writer().write("(") catch unreachable;
-        switch (self.left.*) {
-            .identifier => {
-                const tmp = self.left.identifier.string();
-                _ = list.writer().write(tmp) catch unreachable;
-                // return list.writer().context.items;
-            },
-            .integerLiteral => {
-                const tmp = self.left.integerLiteral.string();
-                _ = list.writer().write(tmp) catch unreachable;
-                // return list.writer().context.items;
-            },
-            .prefixExp => {
-                const prefix = self.left.prefixExp;
-                const prefixString = prefix.string() catch unreachable;
-                _ = list.writer().write(prefixString) catch unreachable;
-                prefix.allocator.free(prefixString);
-            },
-            .infixExp => {
-                const infix = self.left.infixExp;
-                const infixStrng = infix.string() catch unreachable;
-                _ = list.writer().write(infixStrng) catch unreachable;
-                infix.allocator.free(infixStrng);
-            },
-            .boolean => {
-                const tmp = self.left.boolean.string();
-                _ = list.writer().write(tmp) catch unreachable;
-                // return list.writer().context.items;
-            },
-            .ifexp => {
-                const ifexpression = self.left.ifexp;
-                const ifString = ifexpression.string() catch unreachable;
-                _ = list.writer().write(ifString) catch unreachable;
-                ifexpression.allocator.free(ifString);
-            },
-            .function => {
-                const fun = self.left.function;
-                const funString = fun.string() catch unreachable;
-                _ = list.writer().write(funString) catch unreachable;
-                fun.allocator.free(funString);
-            },
-            .callExpression => {
-                const callexp = self.left.callExpression;
-                const callString = callexp.string() catch unreachable;
-                _ = list.writer().write(callString) catch unreachable;
-                callexp.allocator.free(callString);
-            },
-            .stringLiteral => {
-                const str = self.left.stringLiteral;
-                _ = list.writer().write(str.value) catch unreachable;
-                // return list.writer().context.items;
-            },
-            .arrayLiteral => {
-                const arr = self.left.arrayLiteral;
-                const arrString = arr.string() catch unreachable;
-                _ = list.writer().write(arrString) catch unreachable;
-                arr.allocator.free(arrString);
-            },
-            .indexExpression => {
-                const index = self.left.indexExpression;
-                const indexString = index.string() catch unreachable;
-                _ = list.writer().write(indexString) catch unreachable;
-                index.allocator.free(indexString);
-            },
-        }
+        const leftstr = try self.left.string();
+        try list.writer().writeAll(leftstr);
+        self.allocator.free(leftstr);
+        // switch (self.left.*) {
+        //     .identifier => {
+        //         const tmp = self.left.identifier.string() catch unreachable;
+        //         _ = list.writer().write(tmp) catch unreachable;
+        //         // return list.writer().context.items;
+        //     },
+        //     .integerLiteral => {
+        //         const tmp = self.left.integerLiteral.string() catch unreachable;
+        //         _ = list.writer().write(tmp) catch unreachable;
+        //         // return list.writer().context.items;
+        //     },
+        //     .prefixExp => {
+        //         const prefix = self.left.prefixExp;
+        //         const prefixString = prefix.string() catch unreachable;
+        //         _ = list.writer().write(prefixString) catch unreachable;
+        //         prefix.allocator.free(prefixString);
+        //     },
+        //     .infixExp => {
+        //         const infix = self.left.infixExp;
+        //         const infixStrng = infix.string() catch unreachable;
+        //         _ = list.writer().write(infixStrng) catch unreachable;
+        //         infix.allocator.free(infixStrng);
+        //     },
+        //     .boolean => {
+        //         const tmp = self.left.boolean.string() catch unreachable;
+        //         _ = list.writer().write(tmp) catch unreachable;
+        //         // return list.writer().context.items;
+        //     },
+        //     .ifexp => {
+        //         const ifexpression = self.left.ifexp;
+        //         const ifString = ifexpression.string() catch unreachable;
+        //         _ = list.writer().write(ifString) catch unreachable;
+        //         ifexpression.allocator.free(ifString);
+        //     },
+        //     .function => {
+        //         const fun = self.left.function;
+        //         const funString = fun.string() catch unreachable;
+        //         _ = list.writer().write(funString) catch unreachable;
+        //         fun.allocator.free(funString);
+        //     },
+        //     .callExpression => {
+        //         const callexp = self.left.callExpression;
+        //         const callString = callexp.string() catch unreachable;
+        //         _ = list.writer().write(callString) catch unreachable;
+        //         callexp.allocator.free(callString);
+        //     },
+        //     .stringLiteral => {
+        //         const str = self.left.stringLiteral;
+        //         _ = list.writer().write(str.value) catch unreachable;
+        //         // return list.writer().context.items;
+        //     },
+        //     .arrayLiteral => {
+        //         const arr = self.left.arrayLiteral;
+        //         const arrString = arr.string() catch unreachable;
+        //         _ = list.writer().write(arrString) catch unreachable;
+        //         arr.allocator.free(arrString);
+        //     },
+        //     .indexExpression => {
+        //         const index = self.left.indexExpression;
+        //         const indexString = index.string() catch unreachable;
+        //         _ = list.writer().write(indexString) catch unreachable;
+        //         index.allocator.free(indexString);
+        //     },
+        //     .hashLiteral => |hash| {
+        //         const hashStr = hash.string() catch unreachable;
+        //         _ = list.writer().write(hashStr) catch unreachable;
+        //         hash.allocator.free(hashStr);
+        //     },
+        // }
         _ = list.writer().write("[") catch unreachable;
         if (self.index) |index| {
-            switch (index.*) {
-                .identifier => {
-                    const tmp = index.identifier.string();
-                    _ = list.writer().write(tmp) catch unreachable;
-                    // return list.writer().context.items;
-                },
-                .integerLiteral => {
-                    const tmp = index.integerLiteral.string();
-                    _ = list.writer().write(tmp) catch unreachable;
-                    // return list.writer().context.items;
-                },
-                .prefixExp => {
-                    const prefix = index.prefixExp;
-                    const prefixString = prefix.string() catch unreachable;
-                    _ = list.writer().write(prefixString) catch unreachable;
-                    prefix.allocator.free(prefixString);
-                },
-                .infixExp => {
-                    const infix = index.infixExp;
-                    const infixStrng = infix.string() catch unreachable;
-                    _ = list.writer().write(infixStrng) catch unreachable;
-                    infix.allocator.free(infixStrng);
-                },
-                .boolean => {
-                    const tmp = index.boolean.string();
-                    _ = list.writer().write(tmp) catch unreachable;
-                    // return list.writer().context.items;
-                },
-                .ifexp => {
-                    const ifexpression = index.ifexp;
-                    const ifString = ifexpression.string() catch unreachable;
-                    _ = list.writer().write(ifString) catch unreachable;
-                    ifexpression.allocator.free(ifString);
-                },
-                .function => {
-                    const fun = index.function;
-                    const funString = fun.string() catch unreachable;
-                    _ = list.writer().write(funString) catch unreachable;
-                    fun.allocator.free(funString);
-                },
-                .callExpression => {
-                    const callexp = index.callExpression;
-                    const callString = callexp.string() catch unreachable;
-                    _ = list.writer().write(callString) catch unreachable;
-                    callexp.allocator.free(callString);
-                },
-                .stringLiteral => {
-                    const str = index.stringLiteral;
-                    _ = list.writer().write(str.value) catch unreachable;
-                    // return list.writer().context.items;
-                },
-                .arrayLiteral => {
-                    const arr = index.arrayLiteral;
-                    const arrString = arr.string() catch unreachable;
-                    _ = list.writer().write(arrString) catch unreachable;
-                    arr.allocator.free(arrString);
-                },
-                .indexExpression => {
-                    const in = index.indexExpression;
-                    const indexString = in.string() catch unreachable;
-                    _ = list.writer().write(indexString) catch unreachable;
-                    in.allocator.free(indexString);
-                },
-            }
+            const indexstr = try index.string();
+            try list.writer().writeAll(indexstr);
+            self.allocator.free(indexstr);
         }
+        // if (self.index) |index| {
+        //     switch (index.*) {
+        //         .identifier => {
+        //             const tmp = index.identifier.string() catch unreachable;
+        //             _ = list.writer().write(tmp) catch unreachable;
+        //             // return list.writer().context.items;
+        //         },
+        //         .integerLiteral => {
+        //             const tmp = index.integerLiteral.string() catch unreachable;
+        //             _ = list.writer().write(tmp) catch unreachable;
+        //             // return list.writer().context.items;
+        //         },
+        //         .prefixExp => {
+        //             const prefix = index.prefixExp;
+        //             const prefixString = prefix.string() catch unreachable;
+        //             _ = list.writer().write(prefixString) catch unreachable;
+        //             prefix.allocator.free(prefixString);
+        //         },
+        //         .infixExp => {
+        //             const infix = index.infixExp;
+        //             const infixStrng = infix.string() catch unreachable;
+        //             _ = list.writer().write(infixStrng) catch unreachable;
+        //             infix.allocator.free(infixStrng);
+        //         },
+        //         .boolean => {
+        //             const tmp = index.boolean.string() catch unreachable;
+        //             _ = list.writer().write(tmp) catch unreachable;
+        //             // return list.writer().context.items;
+        //         },
+        //         .ifexp => {
+        //             const ifexpression = index.ifexp;
+        //             const ifString = ifexpression.string() catch unreachable;
+        //             _ = list.writer().write(ifString) catch unreachable;
+        //             ifexpression.allocator.free(ifString);
+        //         },
+        //         .function => {
+        //             const fun = index.function;
+        //             const funString = fun.string() catch unreachable;
+        //             _ = list.writer().write(funString) catch unreachable;
+        //             fun.allocator.free(funString);
+        //         },
+        //         .callExpression => {
+        //             const callexp = index.callExpression;
+        //             const callString = callexp.string() catch unreachable;
+        //             _ = list.writer().write(callString) catch unreachable;
+        //             callexp.allocator.free(callString);
+        //         },
+        //         .stringLiteral => {
+        //             const str = index.stringLiteral;
+        //             _ = list.writer().write(str.value) catch unreachable;
+        //             // return list.writer().context.items;
+        //         },
+        //         .arrayLiteral => {
+        //             const arr = index.arrayLiteral;
+        //             const arrString = arr.string() catch unreachable;
+        //             _ = list.writer().write(arrString) catch unreachable;
+        //             arr.allocator.free(arrString);
+        //         },
+        //         .indexExpression => {
+        //             const in = index.indexExpression;
+        //             const indexString = in.string() catch unreachable;
+        //             _ = list.writer().write(indexString) catch unreachable;
+        //             in.allocator.free(indexString);
+        //         },
+        //         .hashLiteral => |hash| {
+        //             const hashStr = hash.string() catch unreachable;
+        //             _ = list.writer().write(hashStr) catch unreachable;
+        //             hash.allocator.free(hashStr);
+        //         },
+        //     }
+        // }
         _ = list.writer().write("]") catch unreachable;
         _ = list.writer().write(")") catch unreachable;
         return list.toOwnedSlice();
@@ -851,54 +1020,62 @@ pub const ArrayLiteral = struct {
 
         if (self.elements) |elements| {
             for (0.., elements.items) |i, value| {
-                switch (value.*) {
-                    .identifier => |id| _ = list.writer().write(id.string()) catch unreachable,
-                    .integerLiteral => |int| _ = list.writer().write(int.string()) catch unreachable,
-                    .prefixExp => |pf| {
-                        const prefixString = pf.string() catch unreachable;
-                        _ = list.writer().write(prefixString) catch unreachable;
-                        //  argList.append(prefixString) catch unreachable;
-                        pf.allocator.free(prefixString);
-                    },
-                    .infixExp => |in| {
-                        const infixStrng = in.string() catch unreachable;
-                        _ = list.writer().write(infixStrng) catch unreachable;
-                        // argList.append(infixStrng) catch unreachable;
-                        in.allocator.free(infixStrng);
-                    },
-                    .boolean => |boo| _ = list.writer().write(boo.string()) catch unreachable,
-                    .ifexp => |ifexpression| {
-                        const ifString = ifexpression.string() catch unreachable;
-                        _ = list.writer().write(ifString) catch unreachable;
-                        // argList.append(ifString) catch unreachable;
-                        ifexpression.allocator.free(ifString);
-                    },
-                    .function => |fun| {
-                        const funString = fun.string() catch unreachable;
-                        _ = list.writer().write(funString) catch unreachable;
-                        // argList.append(funString) catch unreachable;
-                        fun.allocator.free(funString);
-                    },
-                    .callExpression => |call| {
-                        const callstring = call.string() catch unreachable;
-                        _ = list.writer().write(callstring) catch unreachable;
-                        // argList.append(callstring) catch unreachable;
-                        call.allocator.free(callstring);
-                    },
-                    .stringLiteral => |str| {
-                        _ = list.writer().write(str.value) catch unreachable;
-                    },
-                    .arrayLiteral => |arr| {
-                        const arrString = arr.string() catch unreachable;
-                        _ = list.writer().write(arrString) catch unreachable;
-                        arr.allocator.free(arrString);
-                    },
-                    .indexExpression => |index| {
-                        const indexString = index.string() catch unreachable;
-                        _ = list.writer().write(indexString) catch unreachable;
-                        index.allocator.free(indexString);
-                    },
-                }
+                const elemstr = try value.string();
+                try list.writer().writeAll(elemstr);
+                self.allocator.free(elemstr);
+                // switch (value.*) {
+                //     .identifier => |id| _ = list.writer().write(id.string() catch unreachable) catch unreachable,
+                //     .integerLiteral => |int| _ = list.writer().write(int.string() catch unreachable) catch unreachable,
+                //     .prefixExp => |pf| {
+                //         const prefixString = pf.string() catch unreachable;
+                //         _ = list.writer().write(prefixString) catch unreachable;
+                //         //  argList.append(prefixString) catch unreachable;
+                //         pf.allocator.free(prefixString);
+                //     },
+                //     .infixExp => |in| {
+                //         const infixStrng = in.string() catch unreachable;
+                //         _ = list.writer().write(infixStrng) catch unreachable;
+                //         // argList.append(infixStrng) catch unreachable;
+                //         in.allocator.free(infixStrng);
+                //     },
+                //     .boolean => |boo| _ = list.writer().write(boo.string() catch unreachable) catch unreachable,
+                //     .ifexp => |ifexpression| {
+                //         const ifString = ifexpression.string() catch unreachable;
+                //         _ = list.writer().write(ifString) catch unreachable;
+                //         // argList.append(ifString) catch unreachable;
+                //         ifexpression.allocator.free(ifString);
+                //     },
+                //     .function => |fun| {
+                //         const funString = fun.string() catch unreachable;
+                //         _ = list.writer().write(funString) catch unreachable;
+                //         // argList.append(funString) catch unreachable;
+                //         fun.allocator.free(funString);
+                //     },
+                //     .callExpression => |call| {
+                //         const callstring = call.string() catch unreachable;
+                //         _ = list.writer().write(callstring) catch unreachable;
+                //         // argList.append(callstring) catch unreachable;
+                //         call.allocator.free(callstring);
+                //     },
+                //     .stringLiteral => |str| {
+                //         _ = list.writer().write(str.value) catch unreachable;
+                //     },
+                //     .arrayLiteral => |arr| {
+                //         const arrString = arr.string() catch unreachable;
+                //         _ = list.writer().write(arrString) catch unreachable;
+                //         arr.allocator.free(arrString);
+                //     },
+                //     .indexExpression => |index| {
+                //         const indexString = index.string() catch unreachable;
+                //         _ = list.writer().write(indexString) catch unreachable;
+                //         index.allocator.free(indexString);
+                //     },
+                //     .hashLiteral => |hash| {
+                //         const hashStr = hash.string() catch unreachable;
+                //         _ = list.writer().write(hashStr) catch unreachable;
+                //         hash.allocator.free(hashStr);
+                //     },
+                // }
 
                 if (i >= elements.items.len - 1) {
                     continue;
@@ -925,115 +1102,131 @@ pub const CallExpression = struct {
 
     pub fn string(self: CallExpression) Allocator.Error![]u8 {
         var list = std.ArrayList(u8).init(self.allocator);
+        const funcstr = try self.function.string();
+        try list.writer().writeAll(funcstr);
+        self.allocator.free(funcstr);
 
-        switch (self.function.*) {
-            .identifier => {
-                const tmp = self.function.identifier.string();
-                _ = list.writer().write(tmp) catch unreachable;
-                // return list.writer().context.items;
-            },
-            .integerLiteral => {
-                const tmp = self.function.integerLiteral.string();
-                _ = list.writer().write(tmp) catch unreachable;
-                // return list.writer().context.items;
-            },
-            .prefixExp => {
-                const prefix = self.function.prefixExp;
-                const prefixString = prefix.string() catch unreachable;
-                _ = list.writer().write(prefixString) catch unreachable;
-                prefix.allocator.free(prefixString);
-            },
-            .infixExp => {
-                const infix = self.function.infixExp;
-                const infixStrng = infix.string() catch unreachable;
-                _ = list.writer().write(infixStrng) catch unreachable;
-                infix.allocator.free(infixStrng);
-            },
-            .boolean => {
-                const tmp = self.function.boolean.string();
-                _ = list.writer().write(tmp) catch unreachable;
-            },
-            .ifexp => |ifexpression| {
-                const ifString = ifexpression.string() catch unreachable;
-                _ = list.writer().write(ifString) catch unreachable;
-                ifexpression.allocator.free(ifString);
-            },
-            .function => |fun| {
-                const funString = fun.string() catch unreachable;
-                _ = list.writer().write(funString) catch unreachable;
-                fun.allocator.free(funString);
-            },
-            .callExpression => |call| {
-                const callstring = call.string() catch unreachable;
-                _ = list.writer().write(callstring) catch unreachable;
-                call.allocator.free(callstring);
-            },
-            .stringLiteral => |str| {
-                _ = list.writer().write(str.tokenLiteral()) catch unreachable;
-                // return list.writer().context.items;
-            },
-            .arrayLiteral => |arr| {
-                const arrString = arr.string() catch unreachable;
-                _ = list.writer().write(arrString) catch unreachable;
-                arr.allocator.free(arrString);
-            },
-            .indexExpression => |index| {
-                const indexString = index.string() catch unreachable;
-                _ = list.writer().write(indexString) catch unreachable;
-                index.allocator.free(indexString);
-            },
-        }
+        // switch (self.function.*) {
+        //     .identifier => {
+        //         const tmp = self.function.identifier.string() catch unreachable;
+        //         _ = list.writer().write(tmp) catch unreachable;
+        //         // return list.writer().context.items;
+        //     },
+        //     .integerLiteral => {
+        //         const tmp = self.function.integerLiteral.string() catch unreachable;
+        //         _ = list.writer().write(tmp) catch unreachable;
+        //         // return list.writer().context.items;
+        //     },
+        //     .prefixExp => {
+        //         const prefix = self.function.prefixExp;
+        //         const prefixString = prefix.string() catch unreachable;
+        //         _ = list.writer().write(prefixString) catch unreachable;
+        //         prefix.allocator.free(prefixString);
+        //     },
+        //     .infixExp => {
+        //         const infix = self.function.infixExp;
+        //         const infixStrng = infix.string() catch unreachable;
+        //         _ = list.writer().write(infixStrng) catch unreachable;
+        //         infix.allocator.free(infixStrng);
+        //     },
+        //     .boolean => {
+        //         const tmp = self.function.boolean.string() catch unreachable;
+        //         _ = list.writer().write(tmp) catch unreachable;
+        //     },
+        //     .ifexp => |ifexpression| {
+        //         const ifString = ifexpression.string() catch unreachable;
+        //         _ = list.writer().write(ifString) catch unreachable;
+        //         ifexpression.allocator.free(ifString);
+        //     },
+        //     .function => |fun| {
+        //         const funString = fun.string() catch unreachable;
+        //         _ = list.writer().write(funString) catch unreachable;
+        //         fun.allocator.free(funString);
+        //     },
+        //     .callExpression => |call| {
+        //         const callstring = call.string() catch unreachable;
+        //         _ = list.writer().write(callstring) catch unreachable;
+        //         call.allocator.free(callstring);
+        //     },
+        //     .stringLiteral => |str| {
+        //         _ = list.writer().write(str.tokenLiteral()) catch unreachable;
+        //         // return list.writer().context.items;
+        //     },
+        //     .arrayLiteral => |arr| {
+        //         const arrString = arr.string() catch unreachable;
+        //         _ = list.writer().write(arrString) catch unreachable;
+        //         arr.allocator.free(arrString);
+        //     },
+        //     .indexExpression => |index| {
+        //         const indexString = index.string() catch unreachable;
+        //         _ = list.writer().write(indexString) catch unreachable;
+        //         index.allocator.free(indexString);
+        //     },
+        //     .hashLiteral => |hash| {
+        //         const hashStr = hash.string() catch unreachable;
+        //         _ = list.writer().write(hashStr) catch unreachable;
+        //         hash.allocator.free(hashStr);
+        //     },
+        // }
         _ = list.writer().write("(") catch unreachable;
         if (self.arguments) |arguments| {
             for (0.., arguments.items) |i, value| {
-                switch (value.*) {
-                    .identifier => |id| _ = list.writer().write(id.string()) catch unreachable,
-                    .integerLiteral => |int| _ = list.writer().write(int.string()) catch unreachable,
-                    .prefixExp => |pf| {
-                        const prefixString = pf.string() catch unreachable;
-                        _ = list.writer().write(prefixString) catch unreachable;
-                        //  argList.append(prefixString) catch unreachable;
-                        pf.allocator.free(prefixString);
-                    },
-                    .infixExp => |in| {
-                        const infixStrng = in.string() catch unreachable;
-                        _ = list.writer().write(infixStrng) catch unreachable;
-                        // argList.append(infixStrng) catch unreachable;
-                        in.allocator.free(infixStrng);
-                    },
-                    .boolean => |boo| _ = list.writer().write(boo.string()) catch unreachable,
-                    .ifexp => |ifexpression| {
-                        const ifString = ifexpression.string() catch unreachable;
-                        _ = list.writer().write(ifString) catch unreachable;
-                        // argList.append(ifString) catch unreachable;
-                        ifexpression.allocator.free(ifString);
-                    },
-                    .function => |fun| {
-                        const funString = fun.string() catch unreachable;
-                        _ = list.writer().write(funString) catch unreachable;
-                        // argList.append(funString) catch unreachable;
-                        fun.allocator.free(funString);
-                    },
-                    .callExpression => |call| {
-                        const callstring = call.string() catch unreachable;
-                        _ = list.writer().write(callstring) catch unreachable;
-                        // argList.append(callstring) catch unreachable;
-                        call.allocator.free(callstring);
-                    },
-                    .stringLiteral => |str| {
-                        _ = list.writer().write(str.value) catch unreachable;
-                    },
-                    .arrayLiteral => |arr| {
-                        const arrString = arr.string() catch unreachable;
-                        _ = list.writer().write(arrString) catch unreachable;
-                        arr.allocator.free(arrString);
-                    },
-                    .indexExpression => |index| {
-                        const indexString = index.string() catch unreachable;
-                        _ = list.writer().write(indexString) catch unreachable;
-                        index.allocator.free(indexString);
-                    },
-                }
+                const argstr = try value.string();
+                try list.writer().writeAll(argstr);
+                self.allocator.free(argstr);
+                // switch (value.*) {
+                //     .identifier => |id| _ = list.writer().write(id.string() catch unreachable) catch unreachable,
+                //     .integerLiteral => |int| _ = list.writer().write(int.string() catch unreachable) catch unreachable,
+                //     .prefixExp => |pf| {
+                //         const prefixString = pf.string() catch unreachable;
+                //         _ = list.writer().write(prefixString) catch unreachable;
+                //         //  argList.append(prefixString) catch unreachable;
+                //         pf.allocator.free(prefixString);
+                //     },
+                //     .infixExp => |in| {
+                //         const infixStrng = in.string() catch unreachable;
+                //         _ = list.writer().write(infixStrng) catch unreachable;
+                //         // argList.append(infixStrng) catch unreachable;
+                //         in.allocator.free(infixStrng);
+                //     },
+                //     .boolean => |boo| _ = list.writer().write(boo.string() catch unreachable) catch unreachable,
+                //     .ifexp => |ifexpression| {
+                //         const ifString = ifexpression.string() catch unreachable;
+                //         _ = list.writer().write(ifString) catch unreachable;
+                //         // argList.append(ifString) catch unreachable;
+                //         ifexpression.allocator.free(ifString);
+                //     },
+                //     .function => |fun| {
+                //         const funString = fun.string() catch unreachable;
+                //         _ = list.writer().write(funString) catch unreachable;
+                //         // argList.append(funString) catch unreachable;
+                //         fun.allocator.free(funString);
+                //     },
+                //     .callExpression => |call| {
+                //         const callstring = call.string() catch unreachable;
+                //         _ = list.writer().write(callstring) catch unreachable;
+                //         // argList.append(callstring) catch unreachable;
+                //         call.allocator.free(callstring);
+                //     },
+                //     .stringLiteral => |str| {
+                //         _ = list.writer().write(str.value) catch unreachable;
+                //     },
+                //     .arrayLiteral => |arr| {
+                //         const arrString = arr.string() catch unreachable;
+                //         _ = list.writer().write(arrString) catch unreachable;
+                //         arr.allocator.free(arrString);
+                //     },
+                //     .indexExpression => |index| {
+                //         const indexString = index.string() catch unreachable;
+                //         _ = list.writer().write(indexString) catch unreachable;
+                //         index.allocator.free(indexString);
+                //     },
+                //     .hashLiteral => |hash| {
+                //         const hashStr = hash.string() catch unreachable;
+                //         _ = list.writer().write(hashStr) catch unreachable;
+                //         hash.allocator.free(hashStr);
+                //     },
+                // }
 
                 if (i >= self.arguments.?.items.len - 1) {
                     continue;
@@ -1065,7 +1258,7 @@ pub const FunctionLiteral = struct {
         // var params: []const u8 = undefined;
         // assert(self.parameters.?.items.len <= 1024);
         for (0.., self.parameters.?.items) |i, value| {
-            paramlist.append(value.string()) catch unreachable;
+            paramlist.append(value.string() catch unreachable) catch unreachable;
             if (i >= self.parameters.?.items.len - 1) {
                 continue;
             }
@@ -1139,9 +1332,14 @@ pub const IntegerLiteral = struct {
         return self.token.literal;
     }
 
-    pub fn string(self: IntegerLiteral) []const u8 {
+    pub fn string(self: IntegerLiteral) Allocator.Error![]u8 {
         // print("In integerLiteral String {any}\n", .{self.token});
-        return self.token.literal;
+
+        // Allocate a mutable array with the same length as self.value
+        const buffer = try self.allocator.alloc(u8, self.tokenLiteral().len);
+        // Copy contents from self.value ([]const u8) to buffer ([]u8)
+        @memcpy(buffer, self.tokenLiteral());
+        return buffer;
     }
 };
 
@@ -1154,9 +1352,13 @@ pub const Identifier = struct {
         return self.token.literal;
     }
 
-    pub fn string(self: Identifier) []const u8 {
-        // print("In identifier String {}\n", .{self});
-        return self.value;
+    pub fn string(self: Identifier) Allocator.Error![]u8 {
+
+        // Allocate a mutable array with the same length as self.value
+        const buffer = try self.allocator.alloc(u8, self.value.len);
+        // Copy contents from self.value ([]const u8) to buffer ([]u8)
+        @memcpy(buffer, self.value);
+        return buffer;
     }
 };
 pub const Boolean = struct {
@@ -1168,8 +1370,13 @@ pub const Boolean = struct {
         return self.token.literal;
     }
 
-    pub fn string(self: Boolean) []const u8 {
-        return self.token.literal;
+    pub fn string(self: Boolean) Allocator.Error![]u8 {
+
+        // Allocate a mutable array with the same length as self.value
+        const buffer = try self.allocator.alloc(u8, self.tokenLiteral().len);
+        // Copy contents from self.value ([]const u8) to buffer ([]u8)
+        @memcpy(buffer, self.tokenLiteral());
+        return buffer;
     }
 };
 

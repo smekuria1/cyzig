@@ -50,6 +50,7 @@ pub const Environment = struct {
         // std.debug.print("Putting in variable {s}\nPutting object {any}\n\n", .{ key, value });
         const allocKey = self.allocator.dupe(u8, key) catch unreachable;
         self.store.put(allocKey, value) catch unreachable;
+        // self.allocator.free(key);
         // self.printEnvironment();
     }
 

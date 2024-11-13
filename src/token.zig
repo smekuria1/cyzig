@@ -44,4 +44,5 @@ pub const TokenType = enum(u8) {
 
     //Datatypes
     STRING,
+    COLON,
 };
