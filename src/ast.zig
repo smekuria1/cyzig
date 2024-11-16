@@ -477,15 +477,23 @@ pub const HashLiteral = struct {
     pub fn string(self: HashLiteral) Allocator.Error![]u8 {
         var list = std.ArrayList(u8).init(self.allocator);
         var iter = self.pairs.iterator();
+        const size = self.pairs.count();
+        var index: u32 = 0;
         try list.writer().writeAll("{");
         while (iter.next()) |entry| {
+            index += 1;
             const k = try entry.key_ptr.*.string();
             const v = try entry.value_ptr.*.string();
 
-            _ = try list.writer().write(k);
-            _ = try list.writer().write(":");
-            _ = try list.writer().write(v);
-            _ = try list.writer().write(",");
+            try list.writer().writeAll(k);
+            try list.writer().writeAll(":");
+            try list.writer().writeAll(v);
+            if (index + 1 > size) {
+                self.allocator.free(k);
+                self.allocator.free(v);
+                continue;
+            }
+            try list.writer().writeAll(",");
             self.allocator.free(k);
             self.allocator.free(v);
         }

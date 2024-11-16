@@ -190,7 +190,7 @@ pub const Parser = struct {
         };
         hash.pairs = std.AutoHashMap(*Ast.Expression, *Ast.Expression).init(hash.allocator);
         //TODO: Fix optional
-        while (!self.peekTokenIs(.LBRACE)) {
+        while (!self.peekTokenIs(.RBRACE)) {
             self.nextToken(self.l.arenaAlloc.allocator());
             const key = self.parseExpression(.LOWEST) orelse null;
             if (!self.expectPeek(.COLON)) {
@@ -577,8 +577,7 @@ pub const Parser = struct {
 
     pub fn parseExpression(self: *Parser, prec: Precedence) ?*Ast.Expression {
         // self.printTables();
-        /////////TODO:
-        std.debug.print("Parsing {s}\n", .{self.curToken.literal});
+        // std.debug.print("Parsing {s}\n", .{self.curToken.literal});
         // std.debug.print("\nParse Funtion {any}\n", .{self.prefixParseFns.list[6]});
         const prefExists = self.prefixParseFns.filled.get(@intFromEnum(self.curToken.tType));
         if (prefExists == null) {
@@ -684,7 +683,8 @@ pub const Parser = struct {
 test "TesHashLiterals" {
     const allocator = std.testing.allocator;
     const input =
-        \\{"one": 1, "two": 2, "three": 3}
+        \\let x = {"one": 1, "two": 2, "three": 3}
+        \\{"one": 1 + 1 }
     ;
     var l = Lexer.init(allocator, input);
     defer l.deinit();
@@ -694,6 +694,7 @@ test "TesHashLiterals" {
     defer program.deinit();
     defer parser.deinit();
     defer stringer.deinit();
+    std.debug.print("{s}\n", .{stringer.items});
     const parsercheck = parser.checkParserErros();
     try std.testing.expect(!parsercheck);
 }

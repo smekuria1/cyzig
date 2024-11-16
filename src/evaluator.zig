@@ -502,6 +502,7 @@ fn evalProgram(arenaAlloc: Allocator, stmts: []Ast.Statement, environment: *Envi
                 .string => result = Object{ .string = evaluated.string },
                 .builtin => result = Object{ .builtin = evaluated.builtin },
                 .array => result = Object{ .array = evaluated.array },
+                .hash => result = Object{ .hash = evaluated.hash },
             }
         }
     }

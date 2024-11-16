@@ -100,6 +100,7 @@ fn getObjType(o: Object) ObjectType {
         },
     };
 }
+
 pub const ObjectType = enum(u8) {
     INTEGER_OBJ,
     BOOLEAN_OBJ,
@@ -110,7 +111,19 @@ pub const ObjectType = enum(u8) {
     STRING_OBJ,
     BUILTIN_OBJ,
     ARRAY_OBJ,
+    HASH_OBJ,
 };
+
+pub const HashKey = struct {
+    oType: ObjectType,
+    value: u64,
+};
+
+pub const HashPair = struct {
+    key: Object,
+    value: Object,
+};
+
 pub const Object = union(enum) {
     integer: Integer,
     boolean: Boolean,
@@ -121,6 +134,7 @@ pub const Object = union(enum) {
     string: String,
     builtin: Builtin,
     array: Array,
+    hash: Hash,
 
     pub fn stringer(self: Object) ![]const u8 {
         switch (self) {
@@ -129,6 +143,15 @@ pub const Object = union(enum) {
             },
         }
     }
+    pub const Hash = struct {
+        pairs: std.AutoHashMap(HashKey, HashPair),
+        allocator: Allocator,
+        stop: bool = false,
+        pub fn oType(self: Hash) ObjectType {
+            _ = self;
+            return ObjectType.HASH_OBJ;
+        }
+    };
     //Immutable Zig slices
     pub const Array = struct {
         elements: []?Object,
@@ -224,6 +247,10 @@ pub const Object = union(enum) {
             _ = self;
             return ObjectType.INTEGER_OBJ;
         }
+
+        pub fn hashKey(self: Integer) HashKey {
+            return HashKey{ .value = @intCast(self.value), .oType = self.oType() };
+        }
     };
     pub const String = struct {
         stop: bool = false,
@@ -237,6 +264,10 @@ pub const Object = union(enum) {
         pub fn oType(self: String) ObjectType {
             _ = self;
             return ObjectType.STRING_OBJ;
+        }
+        pub fn hashKey(self: String) HashKey {
+            const h = std.hash.Fnv1a_64.hash(self.value);
+            return HashKey{ .value = h, .oType = self.oType() };
         }
     };
     pub const Error = struct {
@@ -291,6 +322,13 @@ pub const Object = union(enum) {
             _ = self;
             return ObjectType.BOOLEAN_OBJ;
         }
+        pub fn hashKey(self: Boolean) HashKey {
+            var val: u64 = 0;
+            if (self.value) {
+                val = 1;
+            }
+            return HashKey{ .value = val, .oType = self.oType() };
+        }
     };
 
     pub const Nil = struct {
@@ -306,3 +344,25 @@ pub const Object = union(enum) {
         }
     };
 };
+
+test "TestHashKeys" {
+    const allocator = std.testing.allocator;
+    const hello1 = Object.String{ .allocator = allocator, .value = "Hello World" };
+    const hello2 = Object.String{ .allocator = allocator, .value = "Hello World" };
+
+    const diff1 = Object.String{ .allocator = allocator, .value = "Hello Mars" };
+    const diff2 = Object.String{ .allocator = allocator, .value = "Hello Mars" };
+
+    if (hello1.hashKey().value != hello2.hashKey().value) {
+        std.debug.print("string with the same content have different hashes\n", .{});
+        try std.testing.expect(false);
+    }
+    if (diff1.hashKey().value != diff2.hashKey().value) {
+        std.debug.print("string with the same content have different hashes\n", .{});
+        try std.testing.expect(false);
+    }
+    if (hello1.hashKey().value == diff1.hashKey().value) {
+        std.debug.print("string with the different content have same hashes\n", .{});
+        try std.testing.expect(false);
+    }
+}
